@@ -33,6 +33,7 @@ import com.google.common.cache.LoadingCache
 import com.tencent.devops.common.api.annotation.ServiceInterface
 import com.tencent.devops.common.api.exception.ClientException
 import com.tencent.devops.common.api.exception.RemoteServiceException
+import com.tencent.devops.common.client.interceptor.HeaderInterceptor
 import com.tencent.devops.common.client.ms.MicroServiceTarget
 import com.tencent.devops.common.client.pojo.enums.GatewayType
 import com.tencent.devops.common.service.config.CommonConfig
@@ -169,6 +170,7 @@ class Client @Autowired constructor(
             .decoder(jacksonDecoder)
             .contract(jaxRsContract)
             .requestInterceptor(requestInterceptor)
+            .requestInterceptor(HeaderInterceptor())
             .options(Request.Options(10 * 1000, 30 * 60 * 1000))
             .retryer(object : Retryer {
                 override fun clone(): Retryer {

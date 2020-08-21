@@ -69,3 +69,5 @@ const val QUEUE_GIT_COMMIT_CHECK = "queue_git_commit_check"
 const val ROUTE_GITHUB_PR = "route_github_pr"
 const val EXCHANGE_GITHUB_PR = "exchange_github_pr"
 const val QUEUE_GITHUB_PR = "queue_github_pr"
+
+const val MQ_RID = "mq_rid"

@@ -27,6 +27,8 @@
 package com.tencent.devops.common.web.mq
 
 import com.fasterxml.jackson.databind.ObjectMapper
+import com.tencent.devops.common.web.mq.processor.HeaderPublishProcessor
+import com.tencent.devops.common.web.mq.processor.HeaderReceiverProcessor
 import com.tencent.devops.common.web.mq.property.ExtendRabbitMQProperties
 import org.springframework.amqp.rabbit.config.SimpleRabbitListenerContainerFactory
 import org.springframework.amqp.rabbit.connection.CachingConnectionFactory
@@ -84,6 +86,8 @@ class ExtendRabbitMQConfiguration {
         objectMapper: ObjectMapper
     ): RabbitTemplate {
         val rabbitTemplate = RabbitTemplate(connectionFactory)
+        rabbitTemplate.setBeforePublishPostProcessors(HeaderPublishProcessor())
+        rabbitTemplate.setAfterReceivePostProcessors(HeaderReceiverProcessor())
         rabbitTemplate.messageConverter = messageConverter(objectMapper)
         return rabbitTemplate
     }

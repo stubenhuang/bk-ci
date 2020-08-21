@@ -27,6 +27,8 @@
 package com.tencent.devops.common.web.mq
 
 import com.fasterxml.jackson.databind.ObjectMapper
+import com.tencent.devops.common.web.mq.processor.HeaderPublishProcessor
+import com.tencent.devops.common.web.mq.processor.HeaderReceiverProcessor
 import com.tencent.devops.common.web.mq.property.CoreRabbitMQProperties
 import org.springframework.amqp.rabbit.config.SimpleRabbitListenerContainerFactory
 import org.springframework.amqp.rabbit.connection.CachingConnectionFactory
@@ -53,16 +55,22 @@ class CoreRabbitMQConfiguration {
 
     @Value("\${spring.rabbitmq.core.virtual-host}")
     private val virtualHost: String? = null
+
     @Value("\${spring.rabbitmq.core.username}")
     private val username: String? = null
+
     @Value("\${spring.rabbitmq.core.password}")
     private val password: String? = null
+
     @Value("\${spring.rabbitmq.core.addresses}")
     private val addresses: String? = null
+
     @Value("\${spring.rabbitmq.core.listener.simple.concurrency:#{null}}")
     private var concurrency: Int? = null
+
     @Value("\${spring.rabbitmq.core.listener.simple.max-concurrency:#{null}}")
     private var maxConcurrency: Int? = null
+
     @Value("\${spring.rabbitmq.core.cache.channel.size:#{null}}")
     private var channelCacheSize: Int? = null
 
@@ -90,6 +98,8 @@ class CoreRabbitMQConfiguration {
         objectMapper: ObjectMapper
     ): RabbitTemplate {
         val rabbitTemplate = RabbitTemplate(connectionFactory)
+        rabbitTemplate.setBeforePublishPostProcessors(HeaderPublishProcessor())
+        rabbitTemplate.setAfterReceivePostProcessors(HeaderReceiverProcessor())
         rabbitTemplate.messageConverter = messageConverter(objectMapper)
         return rabbitTemplate
     }
