@@ -27,6 +27,7 @@
 package com.tencent.devops.common.web
 
 import com.tencent.devops.common.security.jwt.JwtManager
+import com.tencent.devops.common.web.filter.HeaderFilter
 import com.tencent.devops.common.web.filter.ServiceSecurityFilter
 import org.springframework.boot.autoconfigure.AutoConfigureOrder
 import org.springframework.context.annotation.Bean
@@ -47,4 +48,7 @@ class FilterAutoConfiguration(
 
     @Bean
     fun serviceSecurityFilter() = ServiceSecurityFilter(jwtManager, servletRequest)
+
+    @Bean
+    fun headerFilter() = HeaderFilter()
 }
