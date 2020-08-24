@@ -29,7 +29,6 @@ apply plugin: "maven"
 dependencies {
     compile project(":core:common:common-service")
     compile project(":core:common:common-api")
-    compile project(":core:common:common-web")
     compile "io.github.openfeign:feign-jaxrs"
     compile "io.github.openfeign:feign-okhttp"
     compile "io.github.openfeign:feign-jackson"
