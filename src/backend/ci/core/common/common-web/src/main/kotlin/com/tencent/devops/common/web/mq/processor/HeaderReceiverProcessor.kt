@@ -8,6 +8,8 @@ import org.springframework.amqp.core.Message
 
 class HeaderReceiverProcessor : MessagePostProcessor {
     override fun postProcessMessage(message: Message?): Message? {
+        ThreadContext.remove(ThreadKey.RID)
+
         message?.messageProperties?.run {
             ThreadContext.put(ThreadKey.RID, headers[MQ_RID]?.toString() ?: "unknown")
         }

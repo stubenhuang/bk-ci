@@ -18,6 +18,8 @@ class HeaderFilter : ContainerRequestFilter {
             return
         }
 
+        ThreadContext.remove(ThreadKey.RID)
+
         requestContext.headers[HEADER_RID].let {
             ThreadContext.put(
                 ThreadKey.RID,
