@@ -1,0 +1,6 @@
+*
+!src/gateway
+!src/frontend
+!support-files/templates
+!scripts
+!local-dev/release/gateway.tar.gz

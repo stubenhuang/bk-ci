@@ -17,10 +17,15 @@ The above copyright notice and this permission notice shall be included in all c
 THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 ]]
 
+-- 本地开发不进行鉴权
+if os.getenv("BK_CI_ENV") == "local" then
+  return
+end
+
 -- 判断是否是白名单
 local isInServiceWhitelist = false
 
-if next(config.service_ip_whitelist) ~= nil then 
+if next(config.service_ip_whitelist) ~= nil then
   -- 白名单为空的时候不为空的时候
   local service_ip_whitelist = consulUtil.getAllWhitelistIp()
   if next(service_ip_whitelist) ~= nil then
@@ -37,7 +42,7 @@ end
 if not isInServiceWhitelist then
   ngx.log(ngx.STDERR, "client ip do not in service_ip_whitelist: ", err)
   ngx.exit(403)
-end 
+end
 local userId = ""
 if ngx.var.http_x_soda_uid ~= nil and ngx.var.http_x_soda_uid ~= "" then
   userId = ngx.var.http_x_soda_uid

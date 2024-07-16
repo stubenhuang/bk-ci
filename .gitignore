@@ -50,3 +50,7 @@ docker-images/core/ci/*.gz
 #turbo 忽略文件
 src/backend/turbo/**/build/
 src/backend/turbo/release/
+
+# 本地开发文件
+.dockerignore
+local-dev/release/
