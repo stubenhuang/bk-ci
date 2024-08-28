@@ -1,6 +1,6 @@
 REGISTRY ?=
 IMAGE_TAG ?=$(shell git rev-parse --short HEAD 2>/dev/null)
-NODE_JS_VERSION ?= 16
+NODE_JS_VERSION ?= 18
 FRONTEND_PATH := ../src/frontend
 GATEWAY_PATH := ../src/gateway
 

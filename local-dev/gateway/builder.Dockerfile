@@ -1,11 +1,13 @@
-FROM bkci/openresty:0.0.1 as builder
+FROM ubuntu:20.04 as builder
 
 LABEL maintainer="Tencent BlueKing Devops"
 
 ARG NODE_JS_VERSION
 
-RUN curl -fsSL https://rpm.nodesource.com/setup_${NODE_JS_VERSION}.x | bash -
-RUN yum install -y nodejs
+RUN apt update
+RUN apt install -y curl
+RUN curl -fsSL https://deb.nodesource.com/setup_${NODE_JS_VERSION}.x | bash -
+RUN apt install -y nodejs
 RUN npm install -g yarn
 
 # 前端代码
