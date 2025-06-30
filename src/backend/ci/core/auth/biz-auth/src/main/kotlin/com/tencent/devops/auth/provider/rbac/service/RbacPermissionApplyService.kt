@@ -41,19 +41,20 @@ import com.tencent.devops.common.auth.api.pojo.DefaultGroupType
 import com.tencent.devops.common.auth.rbac.utils.RbacAuthUtils
 import com.tencent.devops.common.client.Client
 import com.tencent.devops.common.service.config.CommonConfig
+import com.tencent.devops.common.service.tenant.TenantUtils
 import com.tencent.devops.common.web.utils.I18nUtil
 import com.tencent.devops.process.api.user.UserPipelineViewResource
 import com.tencent.devops.project.api.service.ServiceProjectResource
 import com.tencent.devops.project.api.service.ServiceProjectTagResource
 import com.tencent.devops.project.constant.ProjectMessageCode
-import org.jooq.DSLContext
-import org.slf4j.LoggerFactory
-import org.springframework.beans.factory.annotation.Autowired
-import org.springframework.beans.factory.annotation.Value
 import java.net.URLEncoder
 import java.time.LocalDateTime
 import java.util.concurrent.Executors
 import java.util.concurrent.Future
+import org.jooq.DSLContext
+import org.slf4j.LoggerFactory
+import org.springframework.beans.factory.annotation.Autowired
+import org.springframework.beans.factory.annotation.Value
 
 @Suppress("ALL")
 class RbacPermissionApplyService @Autowired constructor(
@@ -76,12 +77,15 @@ class RbacPermissionApplyService @Autowired constructor(
     private val systemId = ""
 
     private val authApplyRedirectUrl = "${config.devopsHostGateway}/console/permission/apply?" +
-        "project_code=%s&projectName=%s&resourceType=%s&resourceName=%s" +
-        "&iamResourceCode=%s&action=%s&groupName=%s&groupId=%s&iamRelatedResourceType=%s"
+            "project_code=%s&projectName=%s&resourceType=%s&resourceName=%s" +
+            "&iamResourceCode=%s&action=%s&groupName=%s&groupId=%s&iamRelatedResourceType=%s"
     private val pipelineDetailRedirectUri = "${config.devopsHostGateway}/console/pipeline/%s/%s/history"
     private val environmentDetailRedirectUri = "${config.devopsHostGateway}/console/environment/%s/envDetail/%s"
-    private val codeccTaskDetailRedirectUri = "${config.devopsHostGateway}/console/codecc/%s/task/%s/detail?buildNum=latest"
-    private val groupPermissionDetailRedirectUri = "${config.devopsHostGateway}/permission/group/detail?group_id=%s&x-devops-project-id=%s"
+    private val codeccTaskDetailRedirectUri =
+        "${config.devopsHostGateway}/console/codecc/%s/task/%s/detail?buildNum=latest"
+    private val groupPermissionDetailRedirectUri =
+        "${config.devopsHostGateway}/permission/group/detail?group_id=%s&x-devops-project-id=%s"
+
     override fun listResourceTypes(userId: String): List<ResourceTypeInfoVo> {
         return rbacCommonService.listResourceTypes()
     }
@@ -136,7 +140,8 @@ class RbacPermissionApplyService @Autowired constructor(
             managerRoleGroupVO = getGradeManagerRoleGroup(
                 searchGroupInfo = searchGroupInfo,
                 bkIamPath = bkIamPath,
-                relationId = projectInfo.relationId
+                relationId = projectInfo.relationId,
+                tenantId = TenantUtils.getTenantIdByEnglishName(projectId)
             )
             logger.info("RbacPermissionApplyService|listGroups: managerRoleGroupVO=$managerRoleGroupVO")
             groupInfoList = buildGroupInfoList(
@@ -217,7 +222,7 @@ class RbacPermissionApplyService @Autowired constructor(
                 errorCode = AuthMessageCode.ERROR_PROJECT_NOT_UPGRADE,
                 params = arrayOf(projectId),
                 defaultMessage = "The project has not been upgraded to the new permission system," +
-                    " please return to the old permission center to apply!"
+                        " please return to the old permission center to apply!"
             )
         }
     }
@@ -225,7 +230,8 @@ class RbacPermissionApplyService @Autowired constructor(
     private fun getGradeManagerRoleGroup(
         searchGroupInfo: SearchGroupInfo,
         bkIamPath: String?,
-        relationId: String
+        relationId: String,
+        tenantId: String?
     ): V2ManagerRoleGroupVO {
         val searchGroupDTO = SearchGroupDTO
             .builder()
@@ -248,7 +254,12 @@ class RbacPermissionApplyService @Autowired constructor(
         val v2PageInfoDTO = V2PageInfoDTO()
         v2PageInfoDTO.pageSize = searchGroupInfo.pageSize
         v2PageInfoDTO.page = searchGroupInfo.page
-        return v2ManagerService.getGradeManagerRoleGroupV2(relationId, searchGroupDTO, v2PageInfoDTO)
+        return v2ManagerService.getGradeManagerRoleGroupV2(
+            relationId,
+            searchGroupDTO,
+            v2PageInfoDTO,
+            tenantId
+        )
     }
 
     private fun buildGroupInfoList(
@@ -260,7 +271,11 @@ class RbacPermissionApplyService @Autowired constructor(
         if (managerRoleGroupInfoList.isEmpty()) return emptyList()
 
         val groupIds = managerRoleGroupInfoList.map { it.id.toString() }
-        val verifyMemberJoinedResult = verifyMemberJoined(userId, groupIds)
+        val verifyMemberJoinedResult = verifyMemberJoined(
+            userId = userId,
+            groupIds = groupIds,
+            tenantId = TenantUtils.getTenantIdByEnglishName(projectId)
+        )
         val dbGroupRecords = authResourceGroupDao.listByRelationId(dslContext, projectId, groupIds)
 
         return managerRoleGroupInfoList.map { gInfo ->
@@ -272,7 +287,7 @@ class RbacPermissionApplyService @Autowired constructor(
             val memberJoinedResult = verifyMemberJoinedResult[gInfo.id.toInt()]
             val isMemberJoinedGroup = when {
                 memberJoinedResult?.belong == true &&
-                    memberJoinedResult.expiredAt > LocalDateTime.now().timestamp() -> true
+                        memberJoinedResult.expiredAt > LocalDateTime.now().timestamp() -> true
 
                 else -> false
             }
@@ -294,13 +309,15 @@ class RbacPermissionApplyService @Autowired constructor(
 
     private fun verifyMemberJoined(
         userId: String,
-        groupIds: List<String>
+        groupIds: List<String>,
+        tenantId: String? = null
     ): Map<Int, GroupMemberVerifyInfo> {
         val verifyGroupValidMemberResult = mutableMapOf<Int, GroupMemberVerifyInfo>()
         val futures = mutableListOf<Future<*>>()
         groupIds.chunked(20).forEach { batchGroupIds ->
             futures.add(executor.submit {
-                val batchVerifyGroupValidMember = v2ManagerService.verifyGroupValidMember(userId, batchGroupIds.joinToString(","))
+                val batchVerifyGroupValidMember =
+                    v2ManagerService.verifyGroupValidMember(userId, batchGroupIds.joinToString(","), tenantId)
                 verifyGroupValidMemberResult.putAll(batchVerifyGroupValidMember)
             })
         }
@@ -356,11 +373,14 @@ class RbacPermissionApplyService @Autowired constructor(
                 .expiredAt(applyJoinGroupInfo.expiredAt.toLong())
                 .titlePrefix(
                     I18nUtil.getCodeLanMessage(AuthI18nConstants.BK_APPLY_TO_JOIN_PROJECT) +
-                        "[${projectInfo.projectName}]"
+                            "[${projectInfo.projectName}]"
                 )
                 .reason(applyJoinGroupInfo.reason).build()
             logger.info("apply to join group: iamApplicationDTO=$iamApplicationDTO")
-            v2ManagerService.createRoleGroupApplicationV2(iamApplicationDTO)
+            v2ManagerService.createRoleGroupApplicationV2(
+                iamApplicationDTO,
+                TenantUtils.getTenantIdByEnglishName(applyJoinGroupInfo.projectCode)
+            )
             // 记录单据，用于同步用户组
             authResourceGroupApplyDao.batchCreate(
                 dslContext = dslContext,
@@ -434,7 +454,8 @@ class RbacPermissionApplyService @Autowired constructor(
                     pageSize = 10
                 ),
                 bkIamPath = null,
-                relationId = gradeManagerId
+                relationId = gradeManagerId,
+                tenantId = TenantUtils.getTenantIdByEnglishName(projectCode)
             ).results.first()
             logger.info("get resource group info from iam:$projectCode|$projectName|$groupId|$iamGroupInfo")
             ResourceGroupInfo(
@@ -486,7 +507,7 @@ class RbacPermissionApplyService @Autowired constructor(
     ): AuthApplyRedirectInfoVo {
         logger.info(
             "PermissionApplyService|getRedirectInformation: $userId|$projectId" +
-                "|$resourceType|$resourceCode|$action|"
+                    "|$resourceType|$resourceCode|$action|"
         )
         val groupInfoList: MutableList<AuthRedirectGroupInfoVo> = mutableListOf()
         // 判断action是否为空
@@ -511,7 +532,7 @@ class RbacPermissionApplyService @Autowired constructor(
         val iamResourceCode = resourceInfo.iamResourceCode
         logger.info(
             "RbacPermissionApplyService|getRedirectInformation: $iamRelatedResourceType|" +
-                "$resourceTypeName|$resourceInfo|"
+                    "$resourceTypeName|$resourceInfo|"
         )
         val isEnablePermission: Boolean =
             if (action == null || iamRelatedResourceType == AuthResourceType.PROJECT.value) false
@@ -655,7 +676,7 @@ class RbacPermissionApplyService @Autowired constructor(
                     ),
                     groupName = I18nUtil.getCodeLanMessage(
                         messageCode = "${resourceGroup.resourceType}.${resourceGroup.groupCode}" +
-                            AUTH_RESOURCE_GROUP_CONFIG_GROUP_NAME_SUFFIX,
+                                AUTH_RESOURCE_GROUP_CONFIG_GROUP_NAME_SUFFIX,
                         defaultMessage = resourceGroup.groupName
                     ),
                     groupId = resourceGroup.relationId,

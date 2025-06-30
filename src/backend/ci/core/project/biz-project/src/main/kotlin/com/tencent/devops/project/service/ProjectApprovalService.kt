@@ -89,8 +89,7 @@ class ProjectApprovalService @Autowired constructor(
     fun update(
         userId: String,
         projectUpdateInfo: ProjectUpdateInfo,
-        approvalStatus: Int,
-        subjectScopes: List<SubjectScopeInfo>
+        approvalStatus: Int
     ): Int {
         val tipsStatus = when (approvalStatus) {
             ProjectApproveStatus.CREATE_PENDING.status -> ProjectTipsStatus.SHOW_CREATE_PENDING.status
@@ -102,7 +101,6 @@ class ProjectApprovalService @Autowired constructor(
             userId = userId,
             projectUpdateInfo = projectUpdateInfo,
             approvalStatus = approvalStatus,
-            subjectScopes = subjectScopes,
             tipsStatus = tipsStatus
         )
     }
@@ -164,7 +162,8 @@ class ProjectApprovalService @Autowired constructor(
                 centerId = centerId?.toLong() ?: 0L,
                 centerName = centerName ?: "",
                 kind = kind ?: 0,
-                logoAddress = logoAddr
+                logoAddress = logoAddr,
+                tenantId = tenantId
             )
         }
         dslContext.transaction { configuration ->
@@ -282,7 +281,8 @@ class ProjectApprovalService @Autowired constructor(
                 kind = projectInfo.kind,
                 projectType = projectType ?: 0,
                 productId = projectApprovalInfo.productId,
-                properties = updateProjectProperties
+                properties = updateProjectProperties,
+                tenantId = projectInfo.tenantId
             )
         }
         val logoAddress = projectUpdateInfo.logoAddress
@@ -390,14 +390,15 @@ class ProjectApprovalService @Autowired constructor(
                 englishName = englishName,
                 projectType = projectType ?: 0,
                 description = description ?: "",
-                bgId = bgId?.toLong() ?: 0L,
+                bgId = bgId ?: 0L,
                 bgName = bgName ?: "",
-                deptId = deptId?.toLong() ?: 0L,
+                deptId = deptId ?: 0L,
                 deptName = deptName ?: "",
-                centerId = centerId?.toLong() ?: 0L,
+                centerId = centerId ?: 0L,
                 centerName = centerName ?: "",
                 kind = kind ?: 0,
-                logoAddress = logoAddr
+                logoAddress = logoAddr,
+                tenantId = tenantId
             )
         }
         create(

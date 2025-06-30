@@ -43,8 +43,8 @@ import com.tencent.devops.process.utils.PIPELINE_START_USER_ID
 import com.tencent.devops.store.pojo.atom.AtomDevLanguageEnvVar
 import com.tencent.devops.store.pojo.atom.AtomEnv
 import com.tencent.devops.store.pojo.atom.AtomEnvRequest
-import com.tencent.devops.store.pojo.common.sensitive.SensitiveConfResp
 import com.tencent.devops.store.pojo.common.env.StorePkgRunEnvInfo
+import com.tencent.devops.store.pojo.common.sensitive.SensitiveConfResp
 import com.tencent.devops.worker.common.api.AbstractBuildResourceApi
 import com.tencent.devops.worker.common.api.archive.ARCHIVE_PROPS_BUILD_ID
 import com.tencent.devops.worker.common.api.archive.ARCHIVE_PROPS_BUILD_NO
@@ -62,6 +62,7 @@ import com.tencent.devops.worker.common.constants.WorkerMessageCode.GET_PLUGIN_S
 import com.tencent.devops.worker.common.constants.WorkerMessageCode.UPDATE_PLUGIN_ENV_INFO_FAILED
 import com.tencent.devops.worker.common.env.AgentEnv
 import com.tencent.devops.worker.common.logger.LoggerService
+import com.tencent.devops.worker.common.utils.TenantWorkerUtils
 import java.io.File
 import java.net.URLEncoder
 import okhttp3.MediaType.Companion.toMediaTypeOrNull
@@ -119,13 +120,13 @@ class AtomArchiveResourceApi : AbstractBuildResourceApi(), AtomArchiveSDKApi {
             objectMapper.writeValueAsString(atomEnvRequest)
         )
         val request = buildPut(path, body)
-            val responseContent = request(
-                request,
-                MessageUtil.getMessageByLocale(
-                    UPDATE_PLUGIN_ENV_INFO_FAILED,
-                    AgentEnv.getLocaleLanguage()
-                )
+        val responseContent = request(
+            request,
+            MessageUtil.getMessageByLocale(
+                UPDATE_PLUGIN_ENV_INFO_FAILED,
+                AgentEnv.getLocaleLanguage()
             )
+        )
         return objectMapper.readValue(responseContent)
     }
 
@@ -175,12 +176,14 @@ class AtomArchiveResourceApi : AbstractBuildResourceApi(), AtomArchiveSDKApi {
             destPath.trim().removePrefix("/") + "/" + file.name
         }
 
-        LoggerService.addNormalLine("${
-            MessageUtil.getMessageByLocale(
-                ARCHIVE_PLUGIN_FILE_FAILED,
-                AgentEnv.getLocaleLanguage()
-            )
-        }>>> ${file.name}")
+        LoggerService.addNormalLine(
+            "${
+                MessageUtil.getMessageByLocale(
+                    ARCHIVE_PLUGIN_FILE_FAILED,
+                    AgentEnv.getLocaleLanguage()
+                )
+            }>>> ${file.name}"
+        )
 
         val url = StringBuilder("/ms/artifactory/build/atom/result/$path")
         with(buildVariables) {
@@ -247,9 +250,11 @@ class AtomArchiveResourceApi : AbstractBuildResourceApi(), AtomArchiveSDKApi {
         authFlag: Boolean,
         queryCacheFlag: Boolean
     ) {
+        val tenantId = TenantWorkerUtils.getTenantId(projectId)
+        val storeProjectId = if (tenantId == null) "bk-store" else "${tenantId}.bk-store"
         val filePath = when (realm) {
             REALM_LOCAL -> "$BK_CI_ATOM_DIR/$atomFilePath"
-            REALM_BK_REPO -> "/bk-store/plugin/$atomFilePath"
+            REALM_BK_REPO -> "/$storeProjectId/plugin/$atomFilePath"
             else -> throw IllegalArgumentException("unknown artifactory realm")
         }
         if (realm == REALM_BK_REPO) {
@@ -280,7 +285,7 @@ class AtomArchiveResourceApi : AbstractBuildResourceApi(), AtomArchiveSDKApi {
         buildHostOs: String
     ): Result<List<AtomDevLanguageEnvVar>?> {
         val path = "/store/api/build/market/atom/dev/language/env/var/languages/$language/" +
-            "types/$buildHostType/oss/$buildHostOs"
+                "types/$buildHostType/oss/$buildHostOs"
         val request = buildGet(path)
         val responseContent = request(
             request,
@@ -319,7 +324,7 @@ class AtomArchiveResourceApi : AbstractBuildResourceApi(), AtomArchiveSDKApi {
         runtimeVersion: String
     ): Result<StorePkgRunEnvInfo?> {
         val path = "/ms/store/api/build/store/pkg/envs/types/ATOM/languages/$language/versions/$runtimeVersion/get?" +
-            "osName=$osName&osArch=$osArch"
+                "osName=$osName&osArch=$osArch"
         val request = buildGet(path)
         val responseContent = request(request, "get pkgRunEnvInfo fail")
         return objectMapper.readValue(responseContent)

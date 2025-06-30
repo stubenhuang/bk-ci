@@ -42,8 +42,10 @@ import com.tencent.devops.common.api.exception.ErrorCodeException
 import com.tencent.devops.common.api.pojo.Pagination
 import com.tencent.devops.common.api.util.PageUtil
 import com.tencent.devops.common.auth.api.AuthResourceType
+import com.tencent.devops.common.auth.api.ResourceTypeId
 import com.tencent.devops.common.auth.api.pojo.ResourceAuthorizationDTO
 import com.tencent.devops.common.event.dispatcher.trace.TraceEventDispatcher
+import com.tencent.devops.common.service.tenant.TenantUtils
 import org.slf4j.LoggerFactory
 
 @SuppressWarnings("LongParameterList", "TooManyFunctions")
@@ -69,38 +71,42 @@ class RbacPermissionResourceService(
         resourceType: String,
         resourceCode: String,
         resourceName: String,
+        tenantId: String?,
         async: Boolean
     ): Boolean {
-        logger.info("resource create relation|$userId|$projectCode|$resourceType|$resourceCode|$resourceName")
+        val finalProjectCode = TenantUtils.parseEnglishName(tenantId, projectCode)
+        val finalResourceCode =
+            if (resourceType == ResourceTypeId.PROJECT && TenantUtils.isMultiTenantMode()) finalProjectCode else resourceCode
+        logger.info("resource create relation|$userId|$finalProjectCode|$resourceType|$resourceCode|$resourceName")
         val iamResourceCode = authResourceCodeConverter.generateIamCode(
             resourceType = resourceType,
-            resourceCode = resourceCode
+            resourceCode = finalResourceCode
         )
         var projectName = resourceName
         val managerId = if (resourceType == AuthResourceType.PROJECT.value) {
             permissionGradeManagerService.createGradeManager(
                 userId = userId,
-                projectCode = projectCode,
+                projectCode = finalProjectCode,
                 projectName = resourceName,
                 resourceType = AuthResourceType.PROJECT.value,
-                resourceCode = resourceCode,
+                resourceCode = finalResourceCode,
                 resourceName = resourceName
             )
         } else {
             // 获取分级管理员信息
             val projectInfo = authResourceService.get(
-                projectCode = projectCode,
+                projectCode = finalProjectCode,
                 resourceType = AuthResourceType.PROJECT.value,
-                resourceCode = projectCode
+                resourceCode = finalProjectCode
             )
             projectName = projectInfo.resourceName
             permissionSubsetManagerService.createSubsetManager(
                 gradeManagerId = projectInfo.relationId,
                 userId = userId,
-                projectCode = projectCode,
+                projectCode = finalProjectCode,
                 projectName = projectInfo.resourceName,
                 resourceType = resourceType,
-                resourceCode = resourceCode,
+                resourceCode = finalResourceCode,
                 resourceName = resourceName,
                 iamResourceCode = iamResourceCode
             )
@@ -110,20 +116,20 @@ class RbacPermissionResourceService(
         if (isCreateResourceAndGroup) {
             createResource(
                 userId = userId,
-                projectCode = projectCode,
+                projectCode = finalProjectCode,
                 resourceType = resourceType,
                 resourceName = resourceName,
-                resourceCode = resourceCode,
+                resourceCode = finalResourceCode,
                 iamResourceCode = iamResourceCode,
                 managerId = managerId
             )
             createResourceDefaultGroup(
                 userId = userId,
-                projectCode = projectCode,
+                projectCode = finalProjectCode,
                 projectName = projectName,
                 resourceType = resourceType,
                 resourceName = resourceName,
-                resourceCode = resourceCode,
+                resourceCode = finalResourceCode,
                 iamResourceCode = iamResourceCode,
                 async = async,
                 managerId = managerId
@@ -154,10 +160,11 @@ class RbacPermissionResourceService(
                 relationId = managerId.toString()
             )
         } catch (ignore: Exception) {
+            val tenantId = TenantUtils.getTenantId(projectCode)
             if (resourceType == AuthResourceType.PROJECT.value) {
-                iamV2ManagerService.deleteManagerV2(managerId.toString())
+                iamV2ManagerService.deleteManagerV2(managerId.toString(), tenantId)
             } else {
-                iamV2ManagerService.deleteSubsetManager(managerId.toString())
+                iamV2ManagerService.deleteSubsetManager(managerId.toString(), tenantId)
             }
             logger.warn("create resource failed|$userId|$projectCode|$resourceType|$resourceName", ignore)
             throw ErrorCodeException(
@@ -294,7 +301,10 @@ class RbacPermissionResourceService(
                 resourceCode = resourceCode
             )
             if (resourceInfo != null) {
-                permissionSubsetManagerService.deleteSubsetManager(resourceInfo.relationId)
+                permissionSubsetManagerService.deleteSubsetManager(
+                    resourceInfo.relationId,
+                    TenantUtils.getTenantIdByEnglishName(projectCode)
+                )
             }
         }
         authResourceService.delete(

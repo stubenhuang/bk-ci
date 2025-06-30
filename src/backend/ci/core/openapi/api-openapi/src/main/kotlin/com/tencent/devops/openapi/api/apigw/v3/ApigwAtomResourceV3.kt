@@ -26,6 +26,7 @@
  */
 package com.tencent.devops.openapi.api.apigw.v3
 
+import com.tencent.devops.common.api.auth.AUTH_HEADER_BK_TENANT_ID
 import com.tencent.devops.common.api.auth.AUTH_HEADER_DEVOPS_APP_CODE
 import com.tencent.devops.common.api.auth.AUTH_HEADER_DEVOPS_APP_CODE_DEFAULT_VALUE
 import com.tencent.devops.common.api.auth.AUTH_HEADER_DEVOPS_USER_ID
@@ -38,9 +39,9 @@ import com.tencent.devops.store.pojo.atom.AtomPipeline
 import com.tencent.devops.store.pojo.atom.AtomVersion
 import com.tencent.devops.store.pojo.atom.InstallAtomReq
 import com.tencent.devops.store.pojo.common.statistic.StoreStatistic
-import io.swagger.v3.oas.annotations.tags.Tag
 import io.swagger.v3.oas.annotations.Operation
 import io.swagger.v3.oas.annotations.Parameter
+import io.swagger.v3.oas.annotations.tags.Tag
 import jakarta.ws.rs.Consumes
 import jakarta.ws.rs.GET
 import jakarta.ws.rs.HeaderParam
@@ -72,7 +73,10 @@ interface ApigwAtomResourceV3 {
         atomCode: String,
         @Parameter(description = "用户ID", required = true, example = AUTH_HEADER_DEVOPS_USER_ID_DEFAULT_VALUE)
         @HeaderParam(AUTH_HEADER_DEVOPS_USER_ID)
-        userId: String
+        userId: String,
+        @Parameter(description = "租户ID", required = false)
+        @HeaderParam(AUTH_HEADER_BK_TENANT_ID)
+        tenantId: String? = null
     ): Result<AtomVersion?>
 
     @Operation(summary = "根据插件代码获取插件统计信息", tags = ["v3_app_atom_statistic", "v3_user_atom_statistic"])
@@ -93,7 +97,10 @@ interface ApigwAtomResourceV3 {
         userId: String
     ): Result<StoreStatistic>
 
-    @Operation(summary = "根据插件代码获取使用的流水线详情", tags = ["v3_user_atom_pipeline_list", "v3_app_atom_pipeline_list"])
+    @Operation(
+        summary = "根据插件代码获取使用的流水线详情",
+        tags = ["v3_user_atom_pipeline_list", "v3_app_atom_pipeline_list"]
+    )
     @GET
     @Path("/{atomCode}/pipelines")
     fun getAtomPipelinesByCode(
@@ -130,6 +137,9 @@ interface ApigwAtomResourceV3 {
         @Parameter(description = "userId", required = true)
         @HeaderParam(AUTH_HEADER_USER_ID)
         userId: String,
+        @Parameter(description = "租户ID", required = false)
+        @HeaderParam(AUTH_HEADER_BK_TENANT_ID)
+        tenantId: String? = null,
         @Parameter(description = "渠道类型", required = false)
         @QueryParam("channelCode")
         channelCode: ChannelCode? = ChannelCode.BS,

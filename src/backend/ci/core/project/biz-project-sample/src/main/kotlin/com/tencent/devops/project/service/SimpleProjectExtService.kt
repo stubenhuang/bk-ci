@@ -48,7 +48,11 @@ class SimpleProjectExtService @Autowired constructor(
         createExtInfo: ProjectCreateExtInfo,
         logoAddress: String?
     ) {
-        client.get(ServiceBkRepoResource::class).createProjectResource(userId, projectCreateInfo.englishName)
+        client.get(ServiceBkRepoResource::class).createProjectResource(
+            userId = userId,
+            tenantId = projectCreateInfo.tenantId,
+            projectId = projectCreateInfo.englishName
+        )
     }
 
     override fun createOldAuthProject(

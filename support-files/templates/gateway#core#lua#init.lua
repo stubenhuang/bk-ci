@@ -101,6 +101,17 @@ config = {
             switchAll = false,
             domain = "k8s.demo.com"
         }
+    },
+    tenant = {
+        enabled = __BK_TENANT_ENABLED__
+    },
+    bk_login = {
+        host = "__BK_LOGIN_HOST__",
+        path = "__BK_LOGIN_PATH__"
+    },
+    apigw = {
+        app_code = "__BK_CI_APP_CODE__",
+        app_secret = "__BK_CI_APP_TOKEN__"
     }
 }
 

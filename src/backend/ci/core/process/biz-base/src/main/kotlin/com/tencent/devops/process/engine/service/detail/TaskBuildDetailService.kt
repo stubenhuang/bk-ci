@@ -44,6 +44,7 @@ import com.tencent.devops.common.pipeline.pojo.element.matrix.MatrixStatusElemen
 import com.tencent.devops.common.pipeline.pojo.element.quality.QualityGateInElement
 import com.tencent.devops.common.pipeline.pojo.element.quality.QualityGateOutElement
 import com.tencent.devops.common.redis.RedisOperation
+import com.tencent.devops.common.service.tenant.TenantUtils
 import com.tencent.devops.process.dao.BuildDetailDao
 import com.tencent.devops.process.engine.dao.PipelineBuildDao
 import com.tencent.devops.process.engine.pojo.PipelineTaskStatusInfo
@@ -94,7 +95,7 @@ class TaskBuildDetailService(
                         if (e.id.equals(taskId)) {
                             logger.info(
                                 "ENGINE|$buildId|pauseTask|$stageId|j($containerId)|" +
-                                    "t($taskId)|${buildStatus.name}"
+                                        "t($taskId)|${buildStatus.name}"
                             )
                             update = true
                             e.status = buildStatus.name
@@ -297,7 +298,10 @@ class TaskBuildDetailService(
                                 }
                             }
                         }
-                        val atomClassify = getAtomClassify(e.getAtomCode())
+                        val atomClassify = getAtomClassify(
+                            atomCode = e.getAtomCode(),
+                            tenantId = TenantUtils.getTenantIdByEnglishName(projectId)
+                        )
                         e.atomName = atomClassify?.atomName
                         e.classifyCode = atomClassify?.classifyCode
                         e.classifyName = atomClassify?.classifyName
@@ -345,10 +349,10 @@ class TaskBuildDetailService(
         .expireAfterAccess(6, TimeUnit.HOURS)
         .build<String, AtomClassifyInfo>()
 
-    fun getAtomClassify(atomCode: String): AtomClassifyInfo? {
+    fun getAtomClassify(atomCode: String, tenantId: String?): AtomClassifyInfo? {
         var atomClassify = atomClassifyCache.getIfPresent(atomCode)
         if (atomClassify == null) {
-            atomClassify = client.get(ServiceAtomResource::class).getAtomClassifyInfo(atomCode).data
+            atomClassify = client.get(ServiceAtomResource::class).getAtomClassifyInfo(tenantId, atomCode).data
         }
         atomClassify?.let { atomClassifyCache.put(atomCode, it) }
         return atomClassify

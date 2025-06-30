@@ -31,6 +31,7 @@ import com.tencent.bk.sdk.iam.config.IamConfiguration
 import com.tencent.bk.sdk.iam.service.impl.ApigwHttpClientServiceImpl
 import com.tencent.bk.sdk.iam.service.impl.TokenServiceImpl
 import com.tencent.devops.common.auth.api.AuthTokenApi
+import com.tencent.devops.common.auth.mock.api.MockAuthPlatformApi
 import com.tencent.devops.common.auth.rbac.api.RbacAuthPermissionApi
 import com.tencent.devops.common.auth.rbac.api.RbacAuthProjectApi
 import com.tencent.devops.common.auth.rbac.api.RbacAuthTokenApi
@@ -49,6 +50,7 @@ import com.tencent.devops.common.auth.rbac.code.RbacTicketAuthServiceCode
 import com.tencent.devops.common.client.Client
 import com.tencent.devops.common.client.ClientTokenService
 import com.tencent.devops.common.redis.RedisOperation
+import com.tencent.devops.common.service.tenant.TenantUtils
 import org.apache.http.impl.client.CloseableHttpClient
 import org.springframework.boot.autoconfigure.AutoConfigureOrder
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean
@@ -71,7 +73,13 @@ class RbacAuthAutoConfiguration {
     @Bean
     @Primary
     fun iamConfiguration(properties: RbacAuthProperties) = with(properties) {
-        IamConfiguration(iamSystem, appCode, appSecret, url, apigwUrl)
+        IamConfiguration(/* systemId = */ iamSystem,
+            /* appCode = */appCode,
+            /* appSecret = */appSecret,
+            /* iamBaseUrl = */url,
+            /* apigwBaseUrl = */apigwUrl,
+            /* enableMultiTenantMode = */TenantUtils.isMultiTenantMode()
+        )
     }
 
     @Bean
@@ -109,6 +117,10 @@ class RbacAuthAutoConfiguration {
         client: Client,
         tokenService: ClientTokenService
     ) = RbacAuthPermissionApi(client = client, tokenService = tokenService)
+
+    // TODO: 特殊处理 , 等mingshewhe解决
+    @Bean
+    fun authPlatformApi() = MockAuthPlatformApi()
 
     @Bean
     @Primary

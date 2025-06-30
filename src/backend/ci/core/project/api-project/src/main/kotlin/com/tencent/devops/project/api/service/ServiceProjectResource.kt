@@ -27,6 +27,7 @@
 
 package com.tencent.devops.project.api.service
 
+import com.tencent.devops.common.api.auth.AUTH_HEADER_BK_TENANT_ID
 import com.tencent.devops.common.api.auth.AUTH_HEADER_DEVOPS_ACCESS_TOKEN
 import com.tencent.devops.common.api.auth.AUTH_HEADER_DEVOPS_USER_ID
 import com.tencent.devops.common.api.auth.AUTH_HEADER_USER_ID
@@ -76,7 +77,10 @@ interface ServiceProjectResource {
         userId: String,
         @Parameter(description = "userId", required = false)
         @QueryParam("productIds")
-        productIds: String? = null
+        productIds: String? = null,
+        @Parameter(description = "租户ID", required = false)
+        @HeaderParam(AUTH_HEADER_BK_TENANT_ID)
+        tenantId: String?
     ): Result<List<ProjectVO>>
 
     @GET
@@ -128,7 +132,10 @@ interface ServiceProjectResource {
     fun getProjectByUser(
         @Parameter(description = "userId", required = true)
         @QueryParam("userId")
-        userName: String
+        userName: String,
+        @Parameter(description = "租户ID", required = false)
+        @HeaderParam(AUTH_HEADER_BK_TENANT_ID)
+        tenantId: String?
     ): Result<List<ProjectVO>>
 
     @GET
@@ -244,6 +251,9 @@ interface ServiceProjectResource {
         @Parameter(description = "userId", required = true)
         @HeaderParam(AUTH_HEADER_DEVOPS_USER_ID)
         userId: String,
+        @Parameter(description = "租户ID", required = false)
+        @HeaderParam(AUTH_HEADER_BK_TENANT_ID)
+        tenantId: String?,
         @Parameter(description = "projectName", required = true)
         @PathParam("projectName")
         projectName: String
@@ -371,7 +381,10 @@ interface ServiceProjectResource {
     fun getProjectListByProductId(
         @Parameter(description = "产品ID", required = true)
         @QueryParam("productId")
-        productId: Int
+        productId: Int,
+        @Parameter(description = "租户ID", required = true)
+        @HeaderParam(AUTH_HEADER_BK_TENANT_ID)
+        tenantId: String?
     ): Result<List<ProjectBaseInfo>>
 
     @GET

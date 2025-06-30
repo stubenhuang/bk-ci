@@ -60,18 +60,19 @@ import com.tencent.devops.common.auth.api.pojo.ProjectConditionDTO
 import com.tencent.devops.common.client.Client
 import com.tencent.devops.common.event.dispatcher.trace.TraceEventDispatcher
 import com.tencent.devops.common.redis.RedisOperation
+import com.tencent.devops.common.service.tenant.TenantUtils
 import com.tencent.devops.common.service.trace.TraceTag
 import com.tencent.devops.model.auth.tables.records.TAuthResourceGroupApplyRecord
 import com.tencent.devops.project.api.service.ServiceProjectResource
+import java.time.LocalDateTime
+import java.util.concurrent.CompletableFuture
+import java.util.concurrent.CompletionException
+import java.util.concurrent.Executors
 import org.jooq.DSLContext
 import org.jooq.impl.DSL
 import org.slf4j.LoggerFactory
 import org.slf4j.MDC
 import org.springframework.beans.factory.annotation.Autowired
-import java.time.LocalDateTime
-import java.util.concurrent.CompletableFuture
-import java.util.concurrent.CompletionException
-import java.util.concurrent.Executors
 
 @Suppress("LongParameterList")
 class RbacPermissionResourceGroupSyncService @Autowired constructor(
@@ -197,7 +198,8 @@ class RbacPermissionResourceGroupSyncService @Autowired constructor(
                 groupIds.chunked(20).forEach { batchGroupIds ->
                     val batchVerifyGroupValidMember = iamV2ManagerService.verifyGroupValidMember(
                         memberId,
-                        batchGroupIds.joinToString(",")
+                        batchGroupIds.joinToString(","),
+                        TenantUtils.getTenantIdByEnglishName(projectCode)
                     )
                     verifyResults.putAll(batchVerifyGroupValidMember)
                 }
@@ -311,7 +313,8 @@ class RbacPermissionResourceGroupSyncService @Autowired constructor(
                 try {
                     val isMemberJoinedToGroup = iamV2ManagerService.verifyGroupValidMember(
                         it.memberId,
-                        it.iamGroupId.toString()
+                        it.iamGroupId.toString(),
+                        TenantUtils.getTenantIdByEnglishName(it.projectCode)
                     )[it.iamGroupId]?.belong == true
                     isMemberJoinedToGroup
                 } catch (ignore: Exception) {
@@ -348,42 +351,46 @@ class RbacPermissionResourceGroupSyncService @Autowired constructor(
     }
 
     override fun syncGroupAndMember(projectCode: String) {
-        SyncGroupAndMemberLock(redisOperation, projectCode).use { lock ->
-            if (!lock.tryLock()) {
-                logger.info("sync group and member|running:$projectCode")
-                return@use
-            }
-            val startEpoch = System.currentTimeMillis()
-            try {
-                logger.info("sync group and member|start:$projectCode")
-                authResourceSyncDao.createOrUpdate(
-                    dslContext = dslContext,
-                    projectCode = projectCode,
-                    status = AuthMigrateStatus.PENDING.value
-                )
-                // 同步项目下的组信息
-                syncProjectGroup(projectCode = projectCode)
-                // 同步组成员
-                syncResourceGroupMember(projectCode = projectCode)
-                // 防止出现用户组表的数据已经删了，但是用户组成员表的数据未删除，导致出现不同步，调用iam接口报错问题。
-                fixResourceGroupMember(projectCode = projectCode)
-                // 记录完成状态
-                authResourceSyncDao.updateStatus(
-                    dslContext = dslContext,
-                    projectCode = projectCode,
-                    status = AuthMigrateStatus.SUCCEED.value,
-                    totalTime = System.currentTimeMillis() - startEpoch
-                )
-                logger.info(
-                    "It take(${System.currentTimeMillis() - startEpoch})ms to sync " +
-                        "project group and members $projectCode"
-                )
-            } catch (ex: Exception) {
-                handleException(
-                    exception = ex,
-                    projectCode = projectCode,
-                    totalTime = System.currentTimeMillis() - startEpoch
-                )
+        val traceId = MDC.get(TraceTag.BIZID)
+        syncProjectsExecutorService.submit {
+            MDC.put(TraceTag.BIZID, traceId)
+            SyncGroupAndMemberLock(redisOperation, projectCode).use { lock ->
+                if (!lock.tryLock()) {
+                    logger.info("sync group and member|running:$projectCode")
+                    return@use
+                }
+                val startEpoch = System.currentTimeMillis()
+                try {
+                    logger.info("sync group and member|start:$projectCode")
+                    authResourceSyncDao.createOrUpdate(
+                        dslContext = dslContext,
+                        projectCode = projectCode,
+                        status = AuthMigrateStatus.PENDING.value
+                    )
+                    // 同步项目下的组信息
+                    syncProjectGroup(projectCode = projectCode)
+                    // 同步组成员
+                    syncResourceGroupMember(projectCode = projectCode)
+                    // 防止出现用户组表的数据已经删了，但是用户组成员表的数据未删除，导致出现不同步，调用iam接口报错问题。
+                    fixResourceGroupMember(projectCode = projectCode)
+                    // 记录完成状态
+                    authResourceSyncDao.updateStatus(
+                        dslContext = dslContext,
+                        projectCode = projectCode,
+                        status = AuthMigrateStatus.SUCCEED.value,
+                        totalTime = System.currentTimeMillis() - startEpoch
+                    )
+                    logger.info(
+                        "It take(${System.currentTimeMillis() - startEpoch})ms to sync " +
+                                "project group and members $projectCode"
+                    )
+                } catch (ex: Exception) {
+                    handleException(
+                        exception = ex,
+                        projectCode = projectCode,
+                        totalTime = System.currentTimeMillis() - startEpoch
+                    )
+                }
             }
         }
     }
@@ -452,10 +459,12 @@ class RbacPermissionResourceGroupSyncService @Autowired constructor(
                 page = 1
                 pageSize = 1000
             }
+            val tenantId = TenantUtils.getTenantIdByEnglishName(projectCode)
             val iamGroupList = iamV2ManagerService.getGradeManagerRoleGroupV2(
                 projectInfo.relationId,
                 searchGroupDTO,
-                pageInfoDTO
+                pageInfoDTO,
+                tenantId
             ).results
 
             // 查询人员模板列表
@@ -466,7 +475,8 @@ class RbacPermissionResourceGroupSyncService @Autowired constructor(
             val templateMap = iamV2ManagerService.getGradeManagerRoleTemplate(
                 projectInfo.relationId,
                 null,
-                templatePageInfoDTO
+                templatePageInfoDTO,
+                tenantId
             ).results.associateBy { it.sourceGroupId }
 
             val iamGroupMap = iamGroupList.associateBy { it.id }
@@ -636,7 +646,7 @@ class RbacPermissionResourceGroupSyncService @Autowired constructor(
                     } catch (ignore: Exception) {
                         logger.warn(
                             "sync resource group member failed!" +
-                                "|$projectCode|${authResourceGroup.relationId}|$ignore"
+                                    "|$projectCode|${authResourceGroup.relationId}|$ignore"
                         )
                     }
                 }
@@ -730,7 +740,11 @@ class RbacPermissionResourceGroupSyncService @Autowired constructor(
             pageSize = 1000
             page = 1
         }
-        val iamGroupMemberList = iamV2ManagerService.getRoleGroupMemberV2(iamGroupId, pageInfoDTO).results
+        val iamGroupMemberList = iamV2ManagerService.getRoleGroupMemberV2(
+            iamGroupId,
+            pageInfoDTO,
+            TenantUtils.getTenantIdByEnglishName(projectCode)
+        ).results
         val iamGroupMemberMap = iamGroupMemberList.associateBy { it.id }
 
         toDeleteMembers.addAll(resourceGroupMemberMap.filterKeys { !iamGroupMemberMap.contains(it) }.values)
@@ -782,7 +796,11 @@ class RbacPermissionResourceGroupSyncService @Autowired constructor(
             page = 1
         }
         // 查询人员模板列表
-        val iamGroupTemplateList = iamV2ManagerService.listRoleGroupTemplates(iamGroupId, pageInfoDTO).results
+        val iamGroupTemplateList = iamV2ManagerService.listRoleGroupTemplates(
+            iamGroupId,
+            pageInfoDTO,
+            TenantUtils.getTenantIdByEnglishName(projectCode)
+        ).results
         val iamGroupTemplateMap = iamGroupTemplateList.associateBy { it.id }
 
         toDeleteMembers.addAll(resourceGroupMemberMap.filterKeys { !iamGroupTemplateMap.contains(it) }.values)

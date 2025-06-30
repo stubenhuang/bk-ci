@@ -70,11 +70,11 @@ class StreamProjectPermissionServiceImpl @Autowired constructor(
         return
     }
 
-    override fun getUserProjects(userId: String): List<String> {
+    override fun getUserProjects(userId: String, tenantId: String?): List<String> {
         return listOf("demo")
     }
 
-    override fun getUserProjectsAvailable(userId: String): Map<String, String> {
+    override fun getUserProjectsAvailable(userId: String, tenantId: String?): Map<String, String> {
         return emptyMap()
     }
 
@@ -109,6 +109,7 @@ class StreamProjectPermissionServiceImpl @Autowired constructor(
     override fun filterProjects(
         userId: String,
         permission: AuthPermission,
-        resourceType: String?
+        resourceType: String?,
+        tenantId: String?
     ): List<String>? = null
 }

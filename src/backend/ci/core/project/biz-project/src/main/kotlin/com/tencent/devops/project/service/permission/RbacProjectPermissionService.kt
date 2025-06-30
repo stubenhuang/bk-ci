@@ -36,6 +36,7 @@ import com.tencent.devops.common.auth.api.AuthResourceApi
 import com.tencent.devops.common.auth.api.AuthResourceType
 import com.tencent.devops.common.auth.api.pojo.ResourceRegisterInfo
 import com.tencent.devops.common.auth.code.ProjectAuthServiceCode
+import com.tencent.devops.common.service.tenant.TenantUtils
 import com.tencent.devops.project.constant.ProjectMessageCode.APPROVAL_PROJECT_CANT_UPDATE
 import com.tencent.devops.project.dao.ProjectDao
 import com.tencent.devops.project.pojo.AuthProjectCreateInfo
@@ -110,9 +111,13 @@ class RbacProjectPermissionService(
         }
         authResourceApi.createResource(
             user = authProjectCreateInfo.userId,
+            tenantId = authProjectCreateInfo.projectCreateInfo.tenantId,
             serviceCode = projectAuthServiceCode,
             resourceType = AuthResourceType.PROJECT,
-            projectCode = resourceRegisterInfo.resourceCode,
+            projectCode = TenantUtils.parseEnglishName(
+                tenantId = authProjectCreateInfo.projectCreateInfo.tenantId,
+                tenantEnglishName = resourceRegisterInfo.resourceCode
+            ),
             resourceCode = resourceRegisterInfo.resourceCode,
             resourceName = resourceRegisterInfo.resourceName
         )
@@ -148,18 +153,19 @@ class RbacProjectPermissionService(
             projectApprovalService.update(
                 userId = userId,
                 projectUpdateInfo = projectUpdateInfo,
-                approvalStatus = resourceUpdateInfo.approvalStatus,
-                subjectScopes = subjectScopes
+                approvalStatus = resourceUpdateInfo.approvalStatus
             )
         }
         try {
             // 如果创建时被拒绝,修改后再创建,需要重新发起创建申请单
             if (approvalStatus == ProjectApproveStatus.CREATE_REJECT.status) {
+                val tenantId = resourceUpdateInfo.projectUpdateInfo.tenantId
                 authResourceApi.createResource(
                     user = resourceUpdateInfo.userId,
+                    tenantId = tenantId,
                     serviceCode = projectAuthServiceCode,
                     resourceType = AuthResourceType.PROJECT,
-                    projectCode = englishName,
+                    projectCode = TenantUtils.parseEnglishName(tenantId, englishName),
                     resourceCode = englishName,
                     resourceName = resourceUpdateInfo.projectUpdateInfo.projectName
                 )
@@ -175,25 +181,27 @@ class RbacProjectPermissionService(
         } catch (ignore: Exception) {
             logger.warn(
                 "update auth resource failed, " +
-                    "rollback project($englishName) approval|$beforeUpdateProjectApprovalInfo"
+                        "rollback project($englishName) approval|$beforeUpdateProjectApprovalInfo"
             )
             projectApprovalService.rollBack(projectApprovalInfo = beforeUpdateProjectApprovalInfo!!)
             throw ignore
         }
     }
 
-    override fun getUserProjects(userId: String): List<String> {
+    override fun getUserProjects(userId: String, tenantId: String?): List<String> {
         return authProjectApi.getUserProjects(
             serviceCode = projectAuthServiceCode,
             userId = userId,
-            supplier = null
+            supplier = null,
+            tenantId = tenantId
         )
     }
 
-    override fun getUserProjectsAvailable(userId: String): Map<String, String> {
+    override fun getUserProjectsAvailable(userId: String, tenantId: String?): Map<String, String> {
         return authProjectApi.getUserProjectsAvailable(
-            userId = userId,
             serviceCode = projectAuthServiceCode,
+            userId = userId,
+            tenantId = tenantId,
             supplier = null
         )
     }
@@ -233,11 +241,13 @@ class RbacProjectPermissionService(
     override fun filterProjects(
         userId: String,
         permission: AuthPermission,
-        resourceType: String?
+        resourceType: String?,
+        tenantId: String?
     ): List<String>? {
         return authProjectApi.getUserProjectsByPermission(
             serviceCode = projectAuthServiceCode,
             userId = userId,
+            tenantId = tenantId,
             permission = permission,
             supplier = null,
             resourceType = resourceType

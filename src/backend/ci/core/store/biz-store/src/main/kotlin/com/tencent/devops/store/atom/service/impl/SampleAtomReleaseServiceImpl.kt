@@ -28,6 +28,7 @@
 package com.tencent.devops.store.atom.service.impl
 
 import com.tencent.devops.artifactory.api.service.ServiceReplicaResource
+import com.tencent.devops.artifactory.constant.BKREPO_STORE_PROJECT_ID
 import com.tencent.devops.common.api.constant.BEGIN
 import com.tencent.devops.common.api.constant.COMMIT
 import com.tencent.devops.common.api.constant.CommonMessageCode
@@ -90,9 +91,10 @@ class SampleAtomReleaseServiceImpl : SampleAtomReleaseService, AtomReleaseServic
         userId: String,
         branch: String?,
         validOsNameFlag: Boolean?,
-        validOsArchFlag: Boolean?
+        validOsArchFlag: Boolean?,
+        tenantId: String?
     ) {
-        val record = marketAtomDao.getAtomRecordById(dslContext, atomId)
+        val record = marketAtomDao.getAtomRecordById(dslContext, atomId, tenantId)
         record?.let {
             RedisLock(
                 redisOperation,
@@ -126,9 +128,11 @@ class SampleAtomReleaseServiceImpl : SampleAtomReleaseService, AtomReleaseServic
             AtomStatusEnum.INIT.status, AtomStatusEnum.COMMITTING.status -> {
                 storeCommonService.setProcessInfo(processInfo, totalStep, NUM_TWO, DOING)
             }
+
             AtomStatusEnum.TESTING.status -> {
                 storeCommonService.setProcessInfo(processInfo, totalStep, NUM_THREE, DOING)
             }
+
             AtomStatusEnum.RELEASED.status -> {
                 storeCommonService.setProcessInfo(processInfo, totalStep, NUM_FOUR, SUCCESS)
             }
@@ -147,7 +151,7 @@ class SampleAtomReleaseServiceImpl : SampleAtomReleaseService, AtomReleaseServic
             val atomEnvInfo = marketAtomEnvInfoDao.getAtomEnvInfo(dslContext, atomId)!!
             client.get(ServiceReplicaResource::class).createReplicaTask(
                 userId = userId,
-                projectId = "bk-store",
+                projectId = BKREPO_STORE_PROJECT_ID(),
                 repoName = "plugin",
                 fullPath = atomEnvInfo.pkgPath!!
             )
@@ -174,10 +178,11 @@ class SampleAtomReleaseServiceImpl : SampleAtomReleaseService, AtomReleaseServic
         userId: String,
         atomId: String,
         status: Byte,
-        isNormalUpgrade: Boolean?
+        isNormalUpgrade: Boolean?,
+        tenantId: String?
     ): Triple<Boolean, String, Array<String>?> {
         val record =
-            marketAtomDao.getAtomRecordById(dslContext, atomId) ?: return Triple(
+            marketAtomDao.getAtomRecordById(dslContext, atomId, tenantId) ?: return Triple(
                 false,
                 CommonMessageCode.PARAMETER_IS_INVALID,
                 null
@@ -221,10 +226,10 @@ class SampleAtomReleaseServiceImpl : SampleAtomReleaseService, AtomReleaseServic
             validateFlag = false
         } else if (status == AtomStatusEnum.UNDERCARRIAGED.status.toByte() &&
             recordStatus !in (
-                listOf(
-                    AtomStatusEnum.UNDERCARRIAGING.status.toByte(),
-                    AtomStatusEnum.RELEASED.status.toByte()
-                ))
+                    listOf(
+                        AtomStatusEnum.UNDERCARRIAGING.status.toByte(),
+                        AtomStatusEnum.RELEASED.status.toByte()
+                    ))
         ) {
             validateFlag = false
         }

@@ -71,7 +71,7 @@ interface OpAtomService {
     /**
      * 审核插件
      */
-    fun approveAtom(userId: String, atomId: String, approveReq: ApproveReq): Result<Boolean>
+    fun approveAtom(userId: String, atomId: String, approveReq: ApproveReq, tenantId: String?): Result<Boolean>
 
     /**
      * 一键部署发布插件
@@ -83,7 +83,8 @@ interface OpAtomService {
         disposition: FormDataContentDisposition,
         publisher: String? = null,
         releaseType: ReleaseTypeEnum? = null,
-        version: String? = null
+        version: String? = null,
+        tenantId: String?
     ): Result<Boolean>
 
     /**

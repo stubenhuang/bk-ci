@@ -36,9 +36,7 @@ import com.tencent.bk.sdk.iam.dto.response.ResponseDTO
 import com.tencent.devops.auth.common.Constants.DEPT_LABEL
 import com.tencent.devops.auth.common.Constants.HTTP_RESULT
 import com.tencent.devops.auth.common.Constants.ID
-import com.tencent.devops.auth.common.Constants.LEVEL
 import com.tencent.devops.auth.common.Constants.NAME
-import com.tencent.devops.auth.common.Constants.PARENT
 import com.tencent.devops.auth.common.Constants.USERNAME
 import com.tencent.devops.auth.common.Constants.USER_LABEL
 import com.tencent.devops.auth.common.Constants.USER_NAME_AND_DISPLAY_NAME_LABEL
@@ -60,18 +58,17 @@ import com.tencent.devops.common.api.exception.OperationException
 import com.tencent.devops.common.api.util.JsonUtil
 import com.tencent.devops.common.api.util.OkhttpUtils
 import com.tencent.devops.common.auth.api.pojo.EsbBaseReq
-import com.tencent.devops.common.redis.RedisOperation
 import com.tencent.devops.common.web.utils.I18nUtil
+import java.util.concurrent.CopyOnWriteArrayList
+import java.util.concurrent.TimeUnit
 import okhttp3.Headers.Companion.toHeaders
 import okhttp3.MediaType.Companion.toMediaTypeOrNull
 import okhttp3.Request
 import okhttp3.RequestBody
 import org.slf4j.LoggerFactory
 import org.springframework.beans.factory.annotation.Value
-import java.util.concurrent.TimeUnit
 
-class AuthDeptServiceImpl(
-    private val redisOperation: RedisOperation,
+class AuthDeptServiceImpl @Autowired constructor(
     private val objectMapper: ObjectMapper
 ) : DeptService {
 
@@ -110,37 +107,122 @@ class AuthDeptServiceImpl(
         .expireAfterWrite(10, TimeUnit.MINUTES)
         .build<String/*userId*/, Boolean/*是否不存在/离职*/>()
 
-    override fun getDeptByLevel(level: Int, accessToken: String?, userId: String): DeptInfoVo {
+
+    override fun getUserParentDept(userId: String, tenantId: String?): Int {
+        val deptSearchResponse = getUserDeptFamily(userId)
+        val deptId = getUserLastDeptId(deptSearchResponse)
+        val parentSearch = SearchRetrieveDeptEntity(
+            id = deptId,
+            bk_app_code = appCode!!,
+            bk_app_secret = appSecret!!,
+            bk_username = userId
+        )
+        val userCenterResponse = callUserCenter(RETRIEVE_DEPARTMENT, parentSearch)
+        return getParentDept(userCenterResponse)
+    }
+
+    override fun getDeptByName(deptName: String, userId: String, tenantId: String?): DeptInfoVo? {
         val search = SearchUserAndDeptEntity(
             bk_app_code = appCode!!,
             bk_app_secret = appSecret!!,
             bk_username = userId,
             fields = null,
-            lookupField = LEVEL,
-            exactLookups = level,
+            lookupField = NAME,
+            exactLookups = deptName,
             fuzzyLookups = null,
-            accessToken = accessToken
+            accessToken = null
         )
         return listDeptInfos(search)
     }
 
-    override fun getDeptByParent(parentId: Int, accessToken: String?, userId: String, pageSize: Int?): DeptInfoVo {
-        val search = SearchUserAndDeptEntity(
-            bk_app_code = appCode!!,
-            bk_app_secret = appSecret!!,
-            bk_username = userId,
-            fields = null,
-            lookupField = PARENT,
-            exactLookups = parentId,
-            fuzzyLookups = null,
-            accessToken = accessToken,
-            pageSize = pageSize ?: null
+    override fun getUserDeptInfo(userId: String, tenantId: String?): Set<String> {
+        if (userId.endsWith("@tai"))
+            return emptySet()
+        if (userDeptCache.getIfPresent(userId) != null) {
+            return userDeptCache.getIfPresent(userId)!!
+        }
+        val deptFamilyInfo = getUserDeptFamily(userId)
+        val userDeptIds = getUserDeptTreeIds(deptFamilyInfo)
+        userDeptCache.put(userId, userDeptIds)
+        return userDeptIds
+    }
+
+    override fun getUserInfo(userId: String, name: String, tenantId: String?): UserAndDeptInfoVo? {
+        return userInfoCache.getIfPresent(name) ?: getUserAndPutInCache(userId, name)
+    }
+
+    override fun getMemberInfo(
+        memberId: String,
+        memberType: ManagerScopesEnum,
+        tenantId: String?
+    ): UserAndDeptInfoVo {
+        return listMemberInfos(
+            memberIds = listOf(memberId),
+            memberType = memberType
+        ).firstOrNull() ?: throw ErrorCodeException(
+            errorCode = AuthMessageCode.USER_NOT_EXIST,
+            params = arrayOf(memberId),
+            defaultMessage = "member $memberId not exist"
         )
-        return listDeptInfos(search)
+    }
+
+    @Suppress("NestedBlockDepth")
+    override fun listMemberInfos(
+        memberIds: List<String>,
+        memberType: ManagerScopesEnum,
+        tenantId: String?
+    ): List<UserAndDeptInfoVo> {
+        val cacheResult = memberInfoCache.getAllPresent(memberIds)
+        val membersNotInCache = memberIds.filterNot { cacheResult.containsKey(it) }
+
+        if (membersNotInCache.isNotEmpty()) {
+            val memberInfos = fetchMemberInfos(membersNotInCache, memberType)
+            membersNotInCache.forEach { memberId ->
+                val memberInfo = when (memberType) {
+                    ManagerScopesEnum.USER -> memberInfos.firstOrNull { it.name == memberId }
+                    else -> memberInfos.firstOrNull { it.id == memberId.toInt() }
+                }
+
+                when {
+                    memberType == ManagerScopesEnum.USER && memberInfo == null ->
+                        departedMembersCache.put(memberId, true)
+
+                    memberInfo != null ->
+                        memberInfoCache.put(memberId, memberInfo)
+                }
+            }
+        }
+
+        return memberInfoCache.getAllPresent(memberIds).values.toList()
+    }
+
+    override fun listDepartedMembers(memberIds: List<String>, tenantId: String?): List<String> {
+        val activeMembers = listMemberInfos(
+            memberIds = memberIds,
+            memberType = ManagerScopesEnum.USER
+        ).map { it.name }
+        return memberIds.subtract(activeMembers.toSet()).toList().also {
+            logger.info("list departed members : $it")
+        }
+    }
+
+    override fun isUserDeparted(userId: String, tenantId: String?): Boolean {
+        return if (departedMembersCache.getIfPresent(userId) == true) {
+            true
+        } else {
+            listMemberInfos(
+                memberIds = listOf(userId),
+                memberType = ManagerScopesEnum.USER
+            ).isEmpty()
+        }.also {
+            if (it) {
+                logger.info("user departed :$userId")
+            }
+        }
     }
 
     @Suppress("ComplexMethod")
-    override fun getUserAndDeptByName(
+    private fun getUserAndDeptByName(
         name: String,
         accessToken: String?,
         userId: String,
@@ -208,180 +290,6 @@ class AuthDeptServiceImpl(
             else -> {}
         }
         return userAndDeptInfos
-    }
-
-    override fun getDeptUser(deptId: Int, accessToken: String?): List<String> {
-        return if (deptUserCache.getIfPresent(deptId.toString()) != null) {
-            deptUserCache.getIfPresent(deptId.toString())!!
-        } else {
-            val deptUsers = getAndRefreshDeptUser(deptId, accessToken)
-            deptUserCache.put(deptId.toString(), deptUsers)
-            deptUsers
-        }
-    }
-
-    override fun getUserParentDept(userId: String): Int {
-        val deptSearchResponse = getUserDeptFamily(userId)
-        val deptId = getUserLastDeptId(deptSearchResponse)
-        val parentSearch = SearchRetrieveDeptEntity(
-            id = deptId,
-            bk_app_code = appCode!!,
-            bk_app_secret = appSecret!!,
-            bk_username = userId
-        )
-        val userCenterResponse = callUserCenter(RETRIEVE_DEPARTMENT, parentSearch)
-        return getParentDept(userCenterResponse)
-    }
-
-    override fun getDeptByName(deptName: String, userId: String): DeptInfoVo? {
-        val search = SearchUserAndDeptEntity(
-            bk_app_code = appCode!!,
-            bk_app_secret = appSecret!!,
-            bk_username = userId,
-            fields = null,
-            lookupField = NAME,
-            exactLookups = deptName,
-            fuzzyLookups = null,
-            accessToken = null
-        )
-        return listDeptInfos(search)
-    }
-
-    override fun getUserDeptInfo(userId: String): Set<String> {
-        if (userId.endsWith("@tai"))
-            return emptySet()
-        if (userDeptCache.getIfPresent(userId) != null) {
-            return userDeptCache.getIfPresent(userId)!!
-        }
-        val deptFamilyInfo = getUserDeptFamily(userId)
-        val userDeptIds = getUserDeptTreeIds(deptFamilyInfo)
-        userDeptCache.put(userId, userDeptIds)
-        return userDeptIds
-    }
-
-    override fun getUserInfo(userId: String, name: String): UserAndDeptInfoVo? {
-        return userInfoCache.getIfPresent(name) ?: getUserAndPutInCache(name)
-    }
-
-    override fun getUserInfo(userId: String): UserAndDeptInfoVo? {
-        return userInfoCache.getIfPresent(userId) ?: getUserAndPutInCache(userId)
-    }
-
-    override fun getMemberInfo(
-        memberId: String,
-        memberType: ManagerScopesEnum
-    ): UserAndDeptInfoVo {
-        return when (memberType) {
-            ManagerScopesEnum.USER -> {
-                getUserInfo(memberId)
-            }
-
-            else -> {
-                listMemberInfos(
-                    memberIds = listOf(memberId),
-                    memberType = memberType
-                ).firstOrNull()
-            }
-        } ?: throw ErrorCodeException(
-            errorCode = AuthMessageCode.USER_NOT_EXIST,
-            params = arrayOf(memberId),
-            defaultMessage = "member $memberId not exist"
-        )
-    }
-
-    @Suppress("NestedBlockDepth")
-    override fun listMemberInfos(
-        memberIds: List<String>,
-        memberType: ManagerScopesEnum
-    ): List<UserAndDeptInfoVo> {
-        val cacheResult = memberInfoCache.getAllPresent(memberIds)
-        val membersNotInCache = memberIds.filterNot { cacheResult.containsKey(it) }
-
-        if (membersNotInCache.isNotEmpty()) {
-            val memberInfos = fetchMemberInfos(membersNotInCache, memberType)
-            membersNotInCache.forEach { memberId ->
-                val memberInfo = when (memberType) {
-                    ManagerScopesEnum.USER -> memberInfos.firstOrNull { it.name == memberId }
-                    else -> memberInfos.firstOrNull { it.id == memberId.toInt() }
-                }
-
-                when {
-                    memberType == ManagerScopesEnum.USER && memberInfo == null ->
-                        departedMembersCache.put(memberId, true)
-
-                    memberInfo != null ->
-                        memberInfoCache.put(memberId, memberInfo)
-                }
-            }
-        }
-
-        return memberInfoCache.getAllPresent(memberIds).values.toList()
-    }
-
-    override fun listDepartedMembers(memberIds: List<String>): List<String> {
-        val activeMembers = listMemberInfos(
-            memberIds = memberIds,
-            memberType = ManagerScopesEnum.USER
-        ).map { it.name }
-        return memberIds.subtract(activeMembers.toSet()).toList().also {
-            logger.info("list departed members : $it")
-        }
-    }
-
-    override fun isUserDeparted(userId: String): Boolean {
-        return if (departedMembersCache.getIfPresent(userId) == true) {
-            true
-        } else {
-            getUserInfo(userId) == null
-        }.also {
-            if (it) {
-                departedMembersCache.put(userId, true)
-                logger.info("user departed :$userId")
-            }
-        }
-    }
-
-    private fun getUserInfoFromExternal(userId: String): UserAndDeptInfoVo? {
-        return try {
-            val url = getAuthRequestUrl(String.format(USER_INFO, userId))
-            val searchEntity = SearchUserAndDeptEntity(
-                bk_app_code = appCode!!,
-                bk_app_secret = appSecret!!,
-                bk_username = userId,
-                fields = USER_LABEL,
-                lookupField = USERNAME
-            )
-            val request = Request.Builder().url(url)
-                .headers(searchEntity.toMap().toHeaders())
-                .get()
-                .build()
-            OkhttpUtils.doHttp(request).use {
-                if (!it.isSuccessful) {
-                    logger.warn("get user info fail {}|{}|{}", url, searchEntity, it)
-                    throw OperationException(
-                        I18nUtil.getCodeLanMessage(
-                            messageCode = AuthMessageCode.USER_NOT_EXIST
-                        )
-                    )
-                }
-                val responseStr = it.body!!.string()
-                logger.info("get user info response {}", responseStr)
-                val responseDTO = JsonUtil.to(responseStr, object : TypeReference<ResponseDTO<BkUserInfo>>() {})
-                if (responseDTO.code != 0L || responseDTO.result == false) {
-                    logger.warn("get user info fail {}|{}|{}", url, searchEntity, it)
-                    throw OperationException(
-                        I18nUtil.getCodeLanMessage(
-                            messageCode = AuthMessageCode.USER_NOT_EXIST
-                        )
-                    )
-                }
-                logger.info("get user info：${objectMapper.writeValueAsString(responseDTO.data)}")
-                responseDTO.data.toUserAndDeptInfoVo()
-            }
-        } catch (ex: Exception) {
-            logger.warn("User does not exist $userId |$ex")
-            null
-        }
     }
 
     private fun fetchMemberInfos(

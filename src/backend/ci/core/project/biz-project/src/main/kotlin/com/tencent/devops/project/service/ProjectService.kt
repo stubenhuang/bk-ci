@@ -52,8 +52,8 @@ import com.tencent.devops.project.pojo.Result
 import com.tencent.devops.project.pojo.enums.PluginDetailsDisplayOrder
 import com.tencent.devops.project.pojo.enums.ProjectChannelCode
 import com.tencent.devops.project.pojo.enums.ProjectValidateType
-import org.glassfish.jersey.media.multipart.FormDataContentDisposition
 import java.io.InputStream
+import org.glassfish.jersey.media.multipart.FormDataContentDisposition
 
 @Suppress("ALL")
 interface ProjectService {
@@ -164,7 +164,8 @@ interface ProjectService {
         enabled: Boolean? = null,
         unApproved: Boolean,
         sortType: ProjectSortType? = null,
-        collation: ProjectCollation? = null
+        collation: ProjectCollation? = null,
+        tenantId: String?
     ): List<ProjectVO>
 
     fun listProjectsForApply(
@@ -173,10 +174,11 @@ interface ProjectService {
         projectName: String?,
         projectId: String?,
         page: Int,
-        pageSize: Int
+        pageSize: Int,
+        tenantId: String?
     ): Pagination<ProjectByConditionDTO>
 
-    fun list(userId: String, productIds: String? = null): List<ProjectVO>
+    fun list(userId: String, productIds: String? = null, tenantId: String?): List<ProjectVO>
 
     fun list(projectCodes: Set<String>, enabled: Boolean?): List<ProjectVO>
 
@@ -199,7 +201,7 @@ interface ProjectService {
     /**
      * 获取用户已的可访问项目列表=
      */
-    fun getProjectByUser(userName: String): List<ProjectVO>
+    fun getProjectByUser(userName: String, tenantId: String?): List<ProjectVO>
 
     fun getNameByCode(projectCodes: String): HashMap<String, String>
 
@@ -210,7 +212,7 @@ interface ProjectService {
         checkPermission: Boolean = true
     )
 
-    fun searchProjectByProjectName(projectName: String, limit: Int, offset: Int): Page<ProjectVO>
+    fun searchProjectByProjectName(projectName: String, limit: Int, offset: Int, tenantId: String?): Page<ProjectVO>
 
     fun hasCreatePermission(userId: String): Boolean
 
@@ -233,7 +235,7 @@ interface ProjectService {
 
     fun relationIamProject(projectCode: String, relationId: String): Boolean
 
-    fun getProjectByName(projectName: String): ProjectVO?
+    fun getProjectByName(projectName: String, tenantId: String?): ProjectVO?
 
     fun updateProjectProperties(userId: String? = null, projectCode: String, properties: ProjectProperties): Boolean
 
@@ -274,7 +276,8 @@ interface ProjectService {
     ): ProjectOrganizationInfo
 
     fun getProjectListByProductId(
-        productId: Int
+        productId: Int,
+        tenantId: String?
     ): List<ProjectBaseInfo>
 
     fun getExistedEnglishName(

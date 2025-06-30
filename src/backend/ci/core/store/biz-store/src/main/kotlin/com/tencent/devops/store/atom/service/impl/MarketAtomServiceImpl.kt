@@ -270,7 +270,8 @@ abstract class MarketAtomServiceImpl @Autowired constructor() : MarketAtomServic
         desc: Boolean?,
         page: Int?,
         pageSize: Int?,
-        urlProtocolTrim: Boolean = false
+        urlProtocolTrim: Boolean = false,
+        tenantId: String?,
     ): Future<MarketAtomResp> {
         val referer = BkApiUtil.getHttpServletRequest()?.getHeader(REFERER)
         return executor.submit(Callable<MarketAtomResp> {
@@ -289,7 +290,8 @@ abstract class MarketAtomServiceImpl @Autowired constructor() : MarketAtomServic
                 rdType = rdType,
                 yamlFlag = yamlFlag,
                 recommendFlag = recommendFlag,
-                qualityFlag = qualityFlag
+                qualityFlag = qualityFlag,
+                tenantId = tenantId
             )
             val atoms = marketAtomDao.list(
                 dslContext = dslContext,
@@ -304,7 +306,8 @@ abstract class MarketAtomServiceImpl @Autowired constructor() : MarketAtomServic
                 sortType = sortType,
                 desc = desc,
                 page = page,
-                pageSize = pageSize
+                pageSize = pageSize,
+                tenantId = tenantId
             )
                 ?: return@Callable MarketAtomResp(0, page, pageSize, results)
             val tAtom = TAtom.T_ATOM
@@ -413,7 +416,8 @@ abstract class MarketAtomServiceImpl @Autowired constructor() : MarketAtomServic
         userId: String,
         page: Int?,
         pageSize: Int?,
-        urlProtocolTrim: Boolean
+        urlProtocolTrim: Boolean,
+        tenantId: String?
     ): Result<List<MarketMainItem>> {
         val result = mutableListOf<MarketMainItem>()
         // 获取用户组织架构
@@ -439,7 +443,8 @@ abstract class MarketAtomServiceImpl @Autowired constructor() : MarketAtomServic
                 desc = true,
                 page = page,
                 pageSize = pageSize,
-                urlProtocolTrim = urlProtocolTrim
+                urlProtocolTrim = urlProtocolTrim,
+                tenantId = tenantId
             )
         )
         labelInfoList.add(
@@ -464,7 +469,8 @@ abstract class MarketAtomServiceImpl @Autowired constructor() : MarketAtomServic
                 desc = true,
                 page = page,
                 pageSize = pageSize,
-                urlProtocolTrim = urlProtocolTrim
+                urlProtocolTrim = urlProtocolTrim,
+                tenantId = tenantId
             )
         )
 
@@ -495,7 +501,8 @@ abstract class MarketAtomServiceImpl @Autowired constructor() : MarketAtomServic
                         desc = true,
                         page = page,
                         pageSize = pageSize,
-                        urlProtocolTrim = urlProtocolTrim
+                        urlProtocolTrim = urlProtocolTrim,
+                        tenantId = tenantId
                     )
                 )
             }
@@ -530,7 +537,8 @@ abstract class MarketAtomServiceImpl @Autowired constructor() : MarketAtomServic
         sortType: MarketAtomSortTypeEnum?,
         page: Int?,
         pageSize: Int?,
-        urlProtocolTrim: Boolean
+        urlProtocolTrim: Boolean,
+        tenantId: String?
     ): MarketAtomResp {
         // 获取用户组织架构
         val userDeptList = storeUserService.getUserDeptList(userId)
@@ -550,7 +558,8 @@ abstract class MarketAtomServiceImpl @Autowired constructor() : MarketAtomServic
             desc = true,
             page = page,
             pageSize = pageSize,
-            urlProtocolTrim = urlProtocolTrim
+            urlProtocolTrim = urlProtocolTrim,
+            tenantId = tenantId
         ).get()
     }
 
@@ -561,12 +570,13 @@ abstract class MarketAtomServiceImpl @Autowired constructor() : MarketAtomServic
         userId: String,
         atomName: String?,
         page: Int,
-        pageSize: Int
+        pageSize: Int,
+        tenantId: String?
     ): Result<MyAtomResp?> {
         logger.info("getMyAtoms params:[$userId|$atomName|$page|$pageSize]")
         // 获取有权限的插件代码列表
-        val records = marketAtomDao.getMyAtoms(dslContext, userId, atomName, page, pageSize)
-        val count = marketAtomDao.countMyAtoms(dslContext, userId, atomName)
+        val records = marketAtomDao.getMyAtoms(dslContext, userId, atomName, page, pageSize, tenantId)
+        val count = marketAtomDao.countMyAtoms(dslContext, userId, atomName, tenantId)
         // 获取项目ID对应的名称
         val projectCodeList = mutableListOf<String>()
         val atomCodeList = mutableListOf<String>()
@@ -591,7 +601,8 @@ abstract class MarketAtomServiceImpl @Autowired constructor() : MarketAtomServic
         val processingAtomRecords = marketAtomDao.getAtomsByConditions(
             dslContext = dslContext,
             atomCodeList = atomCodeList,
-            atomStatusList = AtomStatusEnum.getProcessingStatusList()
+            atomStatusList = AtomStatusEnum.getProcessingStatusList(),
+            tenantId = tenantId
         )
         // 获取插件处于流程中的版本信息
         var processingVersionInfoMap: MutableMap<String, MutableList<AtomBaseInfo>>? = null
@@ -622,7 +633,11 @@ abstract class MarketAtomServiceImpl @Autowired constructor() : MarketAtomServic
         records?.forEach {
             val atomCode = it[tAtom.ATOM_CODE] as String
             var releaseFlag = false // 是否有处于上架状态的插件插件版本
-            val releaseAtomNum = marketAtomDao.countReleaseAtomByCode(dslContext, atomCode)
+            val releaseAtomNum = marketAtomDao.countReleaseAtomByCode(
+                dslContext = dslContext,
+                atomCode = atomCode,
+                tenantId = tenantId
+            )
             if (releaseAtomNum > 0) {
                 releaseFlag = true
             }
@@ -656,15 +671,23 @@ abstract class MarketAtomServiceImpl @Autowired constructor() : MarketAtomServic
      * 根据插件版本ID获取版本基本信息、发布信息
      */
     @Suppress("UNCHECKED_CAST")
-    override fun getAtomById(atomId: String, userId: String): Result<AtomVersion?> {
-        return getAtomVersion(atomId, userId)
+    override fun getAtomById(atomId: String, userId: String, tenantId: String?): Result<AtomVersion?> {
+        return getAtomVersion(atomId, userId, tenantId)
     }
 
     /**
      * 根据插件标识获取插件回显版本信息
      */
-    override fun getAtomShowVersionInfo(userId: String, atomCode: String): Result<StoreShowVersionInfo> {
-        val record = marketAtomDao.getNewestAtomByCode(dslContext, atomCode) ?: throw ErrorCodeException(
+    override fun getAtomShowVersionInfo(
+        userId: String,
+        atomCode: String,
+        tenantId: String?
+    ): Result<StoreShowVersionInfo> {
+        val record = marketAtomDao.getNewestAtomByCode(
+            dslContext = dslContext,
+            atomCode = atomCode,
+            tenantId = tenantId
+        ) ?: throw ErrorCodeException(
             errorCode = CommonMessageCode.PARAMETER_IS_INVALID,
             params = arrayOf(atomCode)
         )
@@ -672,7 +695,11 @@ abstract class MarketAtomServiceImpl @Autowired constructor() : MarketAtomServic
         val showVersion = if (cancelFlag) {
             record.version
         } else {
-            marketAtomDao.getMaxVersionAtomByCode(dslContext, atomCode)?.version
+            marketAtomDao.getMaxVersionAtomByCode(
+                dslContext = dslContext,
+                atomCode = atomCode,
+                tenantId = tenantId
+            )?.version
         }
         val releaseType = if (record.atomStatus == AtomStatusEnum.INIT.status.toByte()) {
             null
@@ -691,7 +718,8 @@ abstract class MarketAtomServiceImpl @Autowired constructor() : MarketAtomServic
     override fun updateAtomErrorCodeInfo(
         userId: String,
         projectCode: String,
-        storeErrorCodeInfo: StoreErrorCodeInfo
+        storeErrorCodeInfo: StoreErrorCodeInfo,
+        tenantId: String?
     ): Result<Boolean> {
         val atomCode = storeErrorCodeInfo.storeCode ?: throw ErrorCodeException(
             errorCode = CommonMessageCode.PARAMETER_IS_NULL,
@@ -727,7 +755,8 @@ abstract class MarketAtomServiceImpl @Autowired constructor() : MarketAtomServic
             projectCode = projectCode,
             atomCode = atomCode,
             content = errorJsonStr,
-            filePath = ERROR_JSON_NAME
+            filePath = ERROR_JSON_NAME,
+            tenantId = tenantId
         )
         if (updateAtomFileContentResult.isNotOk()) {
             return updateAtomFileContentResult
@@ -755,8 +784,8 @@ abstract class MarketAtomServiceImpl @Autowired constructor() : MarketAtomServic
 
     @Suppress("UNCHECKED_CAST")
     @BkTimed(extraTags = ["web_operation", "getAtomVersion"], value = "store_web_operation")
-    private fun getAtomVersion(atomId: String, userId: String): Result<AtomVersion?> {
-        val record = marketAtomDao.getAtomById(dslContext, atomId)
+    private fun getAtomVersion(atomId: String, userId: String, tenantId: String?): Result<AtomVersion?> {
+        val record = marketAtomDao.getAtomById(dslContext, atomId, tenantId)
         return if (null == record) {
             Result(data = null)
         } else {
@@ -855,7 +884,7 @@ abstract class MarketAtomServiceImpl @Autowired constructor() : MarketAtomServic
                     // 开启插件yml显示
                     yamlFlag = true,
                     dailyStatisticList = getRecentDailyStatisticList(atomCode),
-                    editFlag = marketAtomCommonService.checkEditCondition(atomCode),
+                    editFlag = marketAtomCommonService.checkEditCondition(atomCode, tenantId),
                     honorInfos = storeHonorService.getStoreHonor(userId, StoreTypeEnum.ATOM, atomCode),
                     indexInfos = storeIndexManageService.getStoreIndexInfosByStoreCode(StoreTypeEnum.ATOM, atomCode)
                 )
@@ -890,21 +919,25 @@ abstract class MarketAtomServiceImpl @Autowired constructor() : MarketAtomServic
     /**
      * 根据插件标识获取插件最新、正式版本息
      */
-    override fun getAtomByCode(userId: String, atomCode: String): Result<AtomVersion?> {
-        val record = marketAtomDao.getLatestAtomByCode(dslContext, atomCode)
+    override fun getAtomByCode(userId: String, atomCode: String, tenantId: String?): Result<AtomVersion?> {
+        val record = marketAtomDao.getLatestAtomByCode(dslContext, atomCode, tenantId)
         return (if (null == record) {
             Result(data = null)
         } else {
-            getAtomVersion(record.id, userId)
+            getAtomVersion(record.id, userId, tenantId)
         })
     }
 
     /**
      * 根据标识获取最新版本信息（若最新版本为测试中，取最新版本，否则取最新正式版本）
      */
-    override fun getNewestAtomByCode(userId: String, atomCode: String): Result<AtomVersion?> {
-        val newest = marketAtomDao.getNewestAtomByCode(dslContext, atomCode)
-        val latest = marketAtomDao.getLatestAtomByCode(dslContext, atomCode)
+    override fun getNewestAtomByCode(userId: String, atomCode: String, tenantId: String?): Result<AtomVersion?> {
+        val newest = marketAtomDao.getNewestAtomByCode(
+            dslContext = dslContext,
+            atomCode = atomCode,
+            tenantId = tenantId
+        )
+        val latest = marketAtomDao.getLatestAtomByCode(dslContext, atomCode, tenantId)
         return if (null == newest || null == latest) {
             I18nUtil.generateResponseDataObject(
                 messageCode = CommonMessageCode.PARAMETER_IS_INVALID,
@@ -919,7 +952,7 @@ abstract class MarketAtomServiceImpl @Autowired constructor() : MarketAtomServic
             } else {
                 latest
             }
-            getAtomVersion(record.id, userId)
+            getAtomVersion(record.id, userId, tenantId)
         }
     }
 
@@ -930,11 +963,12 @@ abstract class MarketAtomServiceImpl @Autowired constructor() : MarketAtomServic
     override fun installAtom(
         userId: String,
         channelCode: ChannelCode,
-        installAtomReq: InstallAtomReq
+        installAtomReq: InstallAtomReq,
+        tenantId: String?
     ): Result<Boolean> {
         // 判断插件标识是否合法
         logger.info("installAtom params:[$userId|$channelCode|$installAtomReq]")
-        val atom = marketAtomDao.getLatestAtomByCode(dslContext, installAtomReq.atomCode)
+        val atom = marketAtomDao.getLatestAtomByCode(dslContext, installAtomReq.atomCode, tenantId)
         if (null == atom || atom.deleteFlag == true) {
             return I18nUtil.generateResponseDataObject(
                 messageCode = StoreMessageCode.USER_INSTALL_ATOM_CODE_IS_INVALID,
@@ -951,7 +985,8 @@ abstract class MarketAtomServiceImpl @Autowired constructor() : MarketAtomServic
                 storeType = StoreTypeEnum.ATOM
             ),
             publicFlag = atom.defaultFlag,
-            channelCode = channelCode
+            channelCode = channelCode,
+            tenantId = tenantId
         )
     }
 
@@ -963,7 +998,8 @@ abstract class MarketAtomServiceImpl @Autowired constructor() : MarketAtomServic
         version: String,
         userId: String,
         atomStatus: AtomStatusEnum,
-        msg: String?
+        msg: String?,
+        tenantId: String?
     ): Result<Boolean> {
         logger.info("setAtomBuildStatus|$userId,atomCode:$atomCode,version:$version,atomStatus:$atomStatus,msg:$msg")
         val atomRecord = atomDao.getPipelineAtom(dslContext, atomCode, version)
@@ -977,7 +1013,14 @@ abstract class MarketAtomServiceImpl @Autowired constructor() : MarketAtomServic
         } else {
             // 只有处于构建中的插件才允许改构建结束后的构建状态
             if (AtomStatusEnum.BUILDING.status.toByte() == atomRecord.atomStatus) {
-                marketAtomDao.setAtomStatusById(dslContext, atomRecord.id, atomStatus.status.toByte(), userId, msg)
+                marketAtomDao.setAtomStatusById(
+                    dslContext = dslContext,
+                    atomId = atomRecord.id,
+                    atomStatus = atomStatus.status.toByte(),
+                    userId = userId,
+                    msg = msg,
+                    tenantId = tenantId
+                )
 
                 // 通过websocket推送状态变更消息
                 storeWebsocketService.sendWebsocketMessage(userId, atomRecord.id)
@@ -993,7 +1036,8 @@ abstract class MarketAtomServiceImpl @Autowired constructor() : MarketAtomServic
         userId: String,
         atomCode: String,
         page: Int,
-        pageSize: Int
+        pageSize: Int,
+        tenantId: String?
     ): Result<Page<AtomVersionListItem>> {
         // 判断当前用户是否是该插件的成员
         if (!storeMemberDao.isStoreMember(
@@ -1008,7 +1052,7 @@ abstract class MarketAtomServiceImpl @Autowired constructor() : MarketAtomServic
                 params = arrayOf(atomCode)
             )
         }
-        val totalCount = atomDao.countByCode(dslContext, atomCode)
+        val totalCount = atomDao.countByCode(dslContext, atomCode, tenantId)
         val records = marketAtomDao.getAtomsByAtomCode(dslContext, atomCode, page, pageSize)
         val atomVersions = mutableListOf<AtomVersionListItem>()
         if (records != null) {
@@ -1058,7 +1102,7 @@ abstract class MarketAtomServiceImpl @Autowired constructor() : MarketAtomServic
     /**
      * 删除插件
      */
-    override fun deleteAtom(userId: String, atomCode: String): Result<Boolean> {
+    override fun deleteAtom(userId: String, atomCode: String, tenantId: String?): Result<Boolean> {
         logger.info("deleteAtom userId: $userId , atomCode: $atomCode")
         val type = StoreTypeEnum.ATOM.type.toByte()
         val isOwner = storeMemberDao.isStoreAdmin(dslContext, userId, atomCode, type)
@@ -1069,7 +1113,11 @@ abstract class MarketAtomServiceImpl @Autowired constructor() : MarketAtomServic
                 language = I18nUtil.getLanguage(userId)
             )
         }
-        val releasedCount = marketAtomDao.countReleaseAtomByCode(dslContext, atomCode)
+        val releasedCount = marketAtomDao.countReleaseAtomByCode(
+            dslContext = dslContext,
+            atomCode = atomCode,
+            tenantId = tenantId
+        )
         logger.info("releasedCount: $releasedCount")
         if (releasedCount > 0) {
             return I18nUtil.generateResponseDataObject(
@@ -1101,7 +1149,7 @@ abstract class MarketAtomServiceImpl @Autowired constructor() : MarketAtomServic
             return deleteAtomFileResult
         }
         // 删除代码库
-        val atomRecord = marketAtomDao.getLatestAtomByCode(dslContext, atomCode)
+        val atomRecord = marketAtomDao.getLatestAtomByCode(dslContext, atomCode, tenantId)
         val deleteAtomRepositoryResult = deleteAtomRepository(
             userId = userId,
             projectCode = initProjectCode,
@@ -1134,17 +1182,19 @@ abstract class MarketAtomServiceImpl @Autowired constructor() : MarketAtomServic
         atomCode: String?,
         os: String?,
         classType: String?,
-        defaultShowFlag: Boolean?
+        defaultShowFlag: Boolean?,
+        tenantId: String?
     ): String {
         val atomCodeList = if (atomCode.isNullOrBlank()) {
-            marketAtomDao.getSupportGitCiAtom(dslContext, os, classType).map { it.value1() }
+            marketAtomDao.getSupportGitCiAtom(dslContext, os, classType, tenantId).map { it.value1() }
         } else {
             listOf(atomCode)
         }
 
         val buf = StringBuilder()
-        atomCodeList.filterNotNull().forEach {
-            val atom = marketAtomDao.getLatestAtomByCode(dslContext, it) ?: return@forEach
+        atomCodeList.forEach {
+            val atom = marketAtomDao.getLatestAtomByCode(dslContext = dslContext, atomCode = it, tenantId = tenantId)
+                ?: return@forEach
             val feature = marketAtomFeatureDao.getAtomFeature(dslContext, it) ?: return@forEach
             if (null == feature.recommendFlag || feature.recommendFlag) {
                 buf.append(generateYaml(atom, defaultShowFlag))
@@ -1162,9 +1212,10 @@ abstract class MarketAtomServiceImpl @Autowired constructor() : MarketAtomServic
         atomCode: String,
         os: String?,
         classType: String?,
-        defaultShowFlag: Boolean?
+        defaultShowFlag: Boolean?,
+        tenantId: String?
     ): String {
-        val atom = marketAtomDao.getLatestAtomByCode(dslContext, atomCode) ?: return ""
+        val atom = marketAtomDao.getLatestAtomByCode(dslContext, atomCode, tenantId) ?: return ""
         val feature = marketAtomFeatureDao.getAtomFeature(dslContext, atomCode) ?: return ""
         return if (null == feature.recommendFlag || feature.recommendFlag) {
             generateV2Yaml(atom, defaultShowFlag)
@@ -1173,8 +1224,8 @@ abstract class MarketAtomServiceImpl @Autowired constructor() : MarketAtomServic
         }
     }
 
-    override fun getAtomOutput(atomCode: String): List<AtomOutput> {
-        val atom = marketAtomDao.getLatestAtomByCode(dslContext, atomCode) ?: return emptyList()
+    override fun getAtomOutput(atomCode: String, tenantId: String?): List<AtomOutput> {
+        val atom = marketAtomDao.getLatestAtomByCode(dslContext, atomCode, tenantId) ?: return emptyList()
         val propJsonStr = storeI18nMessageService.parseJsonStrI18nInfo(
             jsonStr = atom.props,
             keyPrefix = StoreUtils.getStoreFieldKeyPrefix(StoreTypeEnum.ATOM, atom.atomCode, atom.version)
@@ -1383,7 +1434,7 @@ abstract class MarketAtomServiceImpl @Autowired constructor() : MarketAtomServic
                 }
                 val type = paramValueMap["type"]
                 val required = null != paramValueMap["required"] &&
-                    "true".equals(paramValueMap["required"].toString(), true)
+                        "true".equals(paramValueMap["required"].toString(), true)
                 val defaultValue = paramValueMap["default"]
                 val multipleMap = paramValueMap["optionsConf"]
                 val multiple = if (null != multipleMap && null != (multipleMap as Map<String, String>)["multiple"]) {
@@ -1437,7 +1488,7 @@ abstract class MarketAtomServiceImpl @Autowired constructor() : MarketAtomServic
                             "atom-checkbox" -> sb.append("boolean")
                             "key-value-normal" -> sb.append(
                                 "\n    - key: string" +
-                                    "\n      value: string"
+                                        "\n      value: string"
                             )
 
                             else -> sb.append("string")
@@ -1496,7 +1547,8 @@ abstract class MarketAtomServiceImpl @Autowired constructor() : MarketAtomServic
         projectCode: String,
         atomCode: String,
         content: String,
-        filePath: String
+        filePath: String,
+        tenantId: String?
     ): Result<Boolean>
 
     @Suppress("UNCHECKED_CAST")

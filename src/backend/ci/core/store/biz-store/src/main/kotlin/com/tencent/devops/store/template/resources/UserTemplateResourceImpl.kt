@@ -33,6 +33,7 @@ import com.tencent.devops.common.client.Client
 import com.tencent.devops.common.pipeline.enums.ChannelCode
 import com.tencent.devops.common.web.RestResource
 import com.tencent.devops.store.api.template.UserTemplateResource
+import com.tencent.devops.store.common.service.StoreProjectService
 import com.tencent.devops.store.pojo.common.InstalledProjRespItem
 import com.tencent.devops.store.pojo.common.enums.StoreTypeEnum
 import com.tencent.devops.store.pojo.template.InstallTemplateReq
@@ -43,7 +44,6 @@ import com.tencent.devops.store.pojo.template.MyTemplateItem
 import com.tencent.devops.store.pojo.template.TemplateDetail
 import com.tencent.devops.store.pojo.template.enums.MarketTemplateSortTypeEnum
 import com.tencent.devops.store.pojo.template.enums.TemplateRdTypeEnum
-import com.tencent.devops.store.common.service.StoreProjectService
 import com.tencent.devops.store.template.service.MarketTemplateService
 import org.springframework.beans.factory.annotation.Autowired
 
@@ -56,28 +56,32 @@ class UserTemplateResourceImpl @Autowired constructor(
 
     override fun getInstalledProjects(
         userId: String,
+        tenantId: String?,
         templateCode: String
     ): Result<List<InstalledProjRespItem?>> {
-        return storeProjectService.getInstalledProjects(userId, templateCode, StoreTypeEnum.TEMPLATE)
+        return storeProjectService.getInstalledProjects(userId, templateCode, StoreTypeEnum.TEMPLATE, tenantId)
     }
 
     override fun getMyTemplates(
         userId: String,
+        tenantId: String?,
         templateName: String?,
         page: Int,
         pageSize: Int
     ): Result<Page<MyTemplateItem>?> {
-        return marketTemplateService.getMyTemplates(userId, templateName, page, pageSize)
+        return marketTemplateService.getMyTemplates(userId, templateName, page, pageSize, tenantId)
     }
 
     override fun installTemplate(
         userId: String,
+        tenantId: String?,
         installTemplateReq: InstallTemplateReq
     ): Result<Boolean> {
         val installResult = marketTemplateService.installTemplate(
             userId = userId,
             channelCode = ChannelCode.BS,
-            installTemplateReq = installTemplateReq
+            installTemplateReq = installTemplateReq,
+            tenantId = tenantId
         )
         return Result(
             status = installResult.status,
@@ -88,21 +92,29 @@ class UserTemplateResourceImpl @Autowired constructor(
 
     override fun installTemplateNew(
         userId: String,
+        tenantId: String?,
         installTemplateReq: InstallTemplateReq
     ): Result<InstallTemplateResp> {
         return marketTemplateService.installTemplate(
             userId = userId,
             channelCode = ChannelCode.BS,
-            installTemplateReq = installTemplateReq
+            installTemplateReq = installTemplateReq,
+            tenantId = tenantId
         )
     }
 
-    override fun mainPageList(userId: String, page: Int?, pageSize: Int?): Result<List<MarketTemplateMain>> {
-        return marketTemplateService.mainPageList(userId, page, pageSize)
+    override fun mainPageList(
+        userId: String,
+        tenantId: String?,
+        page: Int?,
+        pageSize: Int?
+    ): Result<List<MarketTemplateMain>> {
+        return marketTemplateService.mainPageList(userId, page, pageSize, tenantId)
     }
 
     override fun list(
         userId: String,
+        tenantId: String?,
         keyword: String?,
         classifyCode: String?,
         categoryCode: String?,
@@ -126,20 +138,25 @@ class UserTemplateResourceImpl @Autowired constructor(
                 sortType = sortType,
                 projectCode = projectCode,
                 page = page,
-                pageSize = pageSize
+                pageSize = pageSize,
+                tenantId = tenantId
             )
         )
     }
 
-    override fun delete(userId: String, templateCode: String): Result<Boolean> {
-        return marketTemplateService.delete(userId, templateCode)
+    override fun delete(userId: String, tenantId: String?, templateCode: String): Result<Boolean> {
+        return marketTemplateService.delete(userId, templateCode, tenantId)
     }
 
-    override fun getTemplateDetailById(userId: String, templateId: String): Result<TemplateDetail?> {
-        return marketTemplateService.getTemplateDetailById(userId, templateId)
+    override fun getTemplateDetailById(userId: String, tenantId: String?, templateId: String): Result<TemplateDetail?> {
+        return marketTemplateService.getTemplateDetailById(userId, templateId, tenantId)
     }
 
-    override fun getTemplateDetailByCode(userId: String, templateCode: String): Result<TemplateDetail?> {
-        return marketTemplateService.getTemplateDetailByCode(userId, templateCode)
+    override fun getTemplateDetailByCode(
+        userId: String,
+        tenantId: String?,
+        templateCode: String
+    ): Result<TemplateDetail?> {
+        return marketTemplateService.getTemplateDetailByCode(userId, templateCode, tenantId)
     }
 }

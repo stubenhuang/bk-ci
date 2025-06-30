@@ -54,6 +54,7 @@ class ServiceAtomResourceImpl @Autowired constructor(
 
     override fun list(
         userId: String,
+        tenantId: String?,
         keyword: String?,
         classifyCode: String?,
         labelCode: String?,
@@ -80,7 +81,8 @@ class ServiceAtomResourceImpl @Autowired constructor(
                 sortType = sortType,
                 page = page,
                 pageSize = pageSize,
-                urlProtocolTrim = true
+                urlProtocolTrim = true,
+                tenantId = tenantId
             )
         )
     }
@@ -91,8 +93,8 @@ class ServiceAtomResourceImpl @Autowired constructor(
         return Result(atomService.listInstalledAtomByProject(projectCode))
     }
 
-    override fun getAtomVersionInfo(atomCode: String, version: String): Result<PipelineAtom?> {
-        return atomService.getPipelineAtomDetail(atomCode = atomCode, version = version)
+    override fun getAtomVersionInfo(tenantId: String?, atomCode: String, version: String): Result<PipelineAtom?> {
+        return atomService.getPipelineAtomDetail(atomCode = atomCode, version = version, tenantId = tenantId)
     }
 
     override fun getAtomInfos(
@@ -109,7 +111,7 @@ class ServiceAtomResourceImpl @Autowired constructor(
         return Result(atomPropService.getAtomProps(atomCodes))
     }
 
-    override fun getAtomClassifyInfo(atomCode: String): Result<AtomClassifyInfo?> {
-        return atomClassifyService.getAtomClassifyInfo(atomCode)
+    override fun getAtomClassifyInfo(tenantId: String?, atomCode: String): Result<AtomClassifyInfo?> {
+        return atomClassifyService.getAtomClassifyInfo(atomCode, tenantId)
     }
 }

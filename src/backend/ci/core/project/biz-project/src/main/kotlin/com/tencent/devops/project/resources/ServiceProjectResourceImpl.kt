@@ -62,8 +62,8 @@ class ServiceProjectResourceImpl @Autowired constructor(
     private val projectPermissionService: ProjectPermissionService
 ) : ServiceProjectResource {
 
-    override fun getProjectByUser(userName: String): Result<List<ProjectVO>> {
-        return Result(projectService.getProjectByUser(userName))
+    override fun getProjectByUser(userName: String, tenantId: String?): Result<List<ProjectVO>> {
+        return Result(projectService.getProjectByUser(userName, tenantId))
     }
 
     override fun verifyUserProjectPermission(
@@ -80,8 +80,8 @@ class ServiceProjectResourceImpl @Autowired constructor(
         )
     }
 
-    override fun list(userId: String, productIds: String?): Result<List<ProjectVO>> {
-        return Result(projectService.list(userId, productIds))
+    override fun list(userId: String, productIds: String?, tenantId: String?): Result<List<ProjectVO>> {
+        return Result(projectService.list(userId = userId, productIds = productIds, tenantId = tenantId))
     }
 
     override fun getAllProject(): Result<List<ProjectVO>> {
@@ -185,8 +185,8 @@ class ServiceProjectResourceImpl @Autowired constructor(
         )
     }
 
-    override fun getProjectByName(userId: String, projectName: String): Result<ProjectVO?> {
-        return Result(projectService.getProjectByName(projectName))
+    override fun getProjectByName(userId: String, tenantId: String?, projectName: String): Result<ProjectVO?> {
+        return Result(projectService.getProjectByName(projectName, tenantId))
     }
 
     override fun validate(validateType: ProjectValidateType, name: String, projectId: String?): Result<Boolean> {
@@ -268,10 +268,11 @@ class ServiceProjectResourceImpl @Autowired constructor(
         return Result(true)
     }
 
-    override fun getProjectListByProductId(productId: Int): Result<List<ProjectBaseInfo>> {
+    override fun getProjectListByProductId(productId: Int, tenantId: String?): Result<List<ProjectBaseInfo>> {
         return Result(
             projectService.getProjectListByProductId(
-                productId = productId
+                productId = productId,
+                tenantId = tenantId
             )
         )
     }
