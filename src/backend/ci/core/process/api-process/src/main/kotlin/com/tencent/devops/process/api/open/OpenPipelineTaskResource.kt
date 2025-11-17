@@ -27,13 +27,17 @@
 
 package com.tencent.devops.process.api.open
 
+import com.tencent.devops.common.api.auth.AUTH_HEADER_DEVOPS_BK_TOKEN
 import com.tencent.devops.common.api.pojo.Result
+import com.tencent.devops.process.pojo.Pipeline
+import com.tencent.devops.process.pojo.classify.PipelineViewPipelinePage
 import com.tencent.devops.process.pojo.open.BuildStatusInfo
 import io.swagger.v3.oas.annotations.Operation
 import io.swagger.v3.oas.annotations.Parameter
 import io.swagger.v3.oas.annotations.tags.Tag
 import jakarta.ws.rs.Consumes
 import jakarta.ws.rs.GET
+import jakarta.ws.rs.HeaderParam
 import jakarta.ws.rs.Path
 import jakarta.ws.rs.Produces
 import jakarta.ws.rs.QueryParam
@@ -62,4 +66,28 @@ interface OpenPipelineTaskResource {
         @QueryParam("taskId")
         taskId: String?
     ): Result<BuildStatusInfo?> // { "startUser" : "启动人", "debug" : "true/false 是否调试版本", "status" : RUNNING }
+
+    @Operation(summary = "用户获取视图流水线编排列表")
+    @GET
+    @Path("/view/pipeline/list")
+    fun getViewPipelineList(
+        @HeaderParam(AUTH_HEADER_DEVOPS_BK_TOKEN)
+        @Parameter(description = "认证token", required = true)
+        token: String,
+        @Parameter(description = "用户ID", required = true)
+        @QueryParam("userId")
+        userId: String,
+        @Parameter(description = "项目ID", required = true)
+        @QueryParam("projectId")
+        projectId: String,
+        @Parameter(description = "视图ID", required = true)
+        @QueryParam("viewId")
+        viewId: String,
+        @Parameter(description = "页码", required = false)
+        @QueryParam("page")
+        page: Int? = 1,
+        @Parameter(description = "每页数量", required = false)
+        @QueryParam("pageSize")
+        pageSize: Int? = 20
+    ): Result<PipelineViewPipelinePage<Pipeline>>
 }
