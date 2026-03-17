@@ -1,4 +1,10 @@
 <!-- BEGIN MUNGE: GENERATED_TOC -->
+- [v3.0.16](#v3016)
+   - [Changelog since v3.0.15](#changelog-since-v3015)
+
+- [v3.0.15](#v3015)
+   - [Changelog since v3.0.14](#changelog-since-v3014)
+
 - [v3.0.14](#v3014)
    - [Changelog since v3.0.13](#changelog-since-v3013)
 
@@ -22,13 +28,27 @@
 
 
 <!-- NEW RELEASE NOTES ENTRY -->
-# v3.0.14
-## 2025-07-11
-### Changelog since v3.0.13
+# v3.0.16
+## 2025-12-29
+### Changelog since v3.0.15
 #### 修复
 
+##### 流水线
+- [修复] bug: 修复tgit触发器2.0版本内容为空 [链接](http://github.com/TencentBlueKing/bk-ci/issues/12530)
+
+##### 其他
+- [修复] bugfix: 初始化默认镜像脚本报错 [链接](http://github.com/TencentBlueKing/bk-ci/issues/12216)
+
+# v3.0.15
+## 2025-08-08
+### Changelog since v3.0.14
+#### 新增
+
 ##### 未分类
-- [修复] bug: 用户态接口增加项目访问权限校验 [链接](http://github.com/TencentBlueKing/bk-ci/issues/11971)
+- [新增] feat: Maven仓库发布从oss迁移到central [链接](http://github.com/TencentBlueKing/bk-ci/issues/11817)
+- [新增] feat: 支持服务间jwt验证 [链接](http://github.com/TencentBlueKing/bk-ci/issues/12067)
+- [新增] feat: 去掉proxy跨网络区域的代码 [链接](http://github.com/TencentBlueKing/bk-ci/issues/12091)
+- [新增] feat: 升级turbo版本 [链接](http://github.com/TencentBlueKing/bk-ci/issues/12055)
 
 # v3.0.14
 ## 2025-07-11
